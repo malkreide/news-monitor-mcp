@@ -347,3 +347,156 @@ async def test_live_sentiment_ki_bildung():
     )
     result = await news_sentiment_monitor(params)
     assert "Sentiment" in result
+
+
+# ---------------------------------------------------------------------------
+# Cache-Tests
+# ---------------------------------------------------------------------------
+
+def test_cache_miss_returns_none():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    result = cache.get("search", {"q": "test"})
+    assert result is None
+
+def test_cache_set_and_get():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    data = {"news": [{"title": "Test"}], "available": 1}
+    cache.set("search", {"q": "test"}, data)
+    result = cache.get("search", {"q": "test"})
+    assert result is not None
+    assert result["news"][0]["title"] == "Test"
+
+def test_cache_different_params_different_keys():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    cache.set("search", {"q": "test1"}, {"data": "A"})
+    cache.set("search", {"q": "test2"}, {"data": "B"})
+    assert cache.get("search", {"q": "test1"})["data"] == "A"
+    assert cache.get("search", {"q": "test2"})["data"] == "B"
+
+def test_cache_stats_initial():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    stats = cache.stats()
+    assert stats["gesamt_eintraege"] == 0
+    assert stats["hits"] == 0
+    assert stats["misses"] == 0
+
+def test_cache_stats_after_hit():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    cache.set("search", {"q": "test"}, {"data": "x"})
+    cache.get("search", {"q": "test"})  # hit
+    cache.get("search", {"q": "miss"})  # miss
+    stats = cache.stats()
+    assert stats["hits"] == 1
+    assert stats["misses"] == 1
+    assert stats["api_calls_gespart"] == 1
+
+def test_cache_clear_all():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    cache.set("search", {"q": "a"}, {"d": 1})
+    cache.set("headlines", {"sc": "ch"}, {"d": 2})
+    count = cache.clear()
+    assert count == 2
+    assert cache.stats()["gesamt_eintraege"] == 0
+
+def test_cache_clear_by_type():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    cache.set("search", {"q": "a"}, {"d": 1})
+    cache.set("headlines", {"sc": "ch"}, {"d": 2})
+    count = cache.clear("search")
+    assert count == 1
+    assert cache.get("search", {"q": "a"}) is None
+    assert cache.get("headlines", {"sc": "ch"}) is not None
+
+def test_cache_hit_rate_display():
+    from news_monitor_mcp.server import NewsCache
+    cache = NewsCache()
+    cache.set("search", {"q": "test"}, {"data": "x"})
+    cache.get("search", {"q": "test"})  # hit
+    cache.get("search", {"q": "miss"})  # miss
+    stats = cache.stats()
+    assert stats["hit_rate"] == "50.0%"
+
+
+# ---------------------------------------------------------------------------
+# AlertManager-Tests
+# ---------------------------------------------------------------------------
+
+def test_alert_manager_create_and_list(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert_id = mgr.create({"name": "Test Alert", "entity": "Schulamt Zürich",
+        "language": "de", "source_country": "ch", "days_back": 7,
+        "condition_type": "sentiment_below", "threshold": -0.2, "keyword": None})
+    assert alert_id.startswith("alert_")
+    alerts = mgr.list_all()
+    assert len(alerts) == 1
+    assert alerts[0]["name"] == "Test Alert"
+
+def test_alert_manager_delete(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert_id = mgr.create({"name": "Delete Me", "entity": "test",
+        "language": "de", "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 50.0, "keyword": None})
+    assert mgr.delete(alert_id) is True
+    assert len(mgr.list_all()) == 0
+    assert mgr.delete("nonexistent") is False
+
+def test_alert_evaluate_sentiment_below(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert = {"condition_type": "sentiment_below", "threshold": -0.2, "keyword": None}
+    triggered, reason = mgr.evaluate_condition(alert, [], avg_sentiment=-0.5)
+    assert triggered is True
+    triggered, reason = mgr.evaluate_condition(alert, [], avg_sentiment=0.1)
+    assert triggered is False
+
+def test_alert_evaluate_sentiment_above(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert = {"condition_type": "sentiment_above", "threshold": 0.5, "keyword": None}
+    triggered, _ = mgr.evaluate_condition(alert, [], avg_sentiment=0.8)
+    assert triggered is True
+    triggered, _ = mgr.evaluate_condition(alert, [], avg_sentiment=0.2)
+    assert triggered is False
+
+def test_alert_evaluate_volume_above(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert = {"condition_type": "volume_above", "threshold": 5.0, "keyword": None}
+    articles = [{"title": f"Art {i}"} for i in range(10)]
+    triggered, _ = mgr.evaluate_condition(alert, articles, avg_sentiment=None)
+    assert triggered is True
+    triggered, _ = mgr.evaluate_condition(alert, articles[:3], avg_sentiment=None)
+    assert triggered is False
+
+def test_alert_evaluate_keyword_found(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert = {"condition_type": "keyword_found", "threshold": None, "keyword": "streik"}
+    articles = [{"title": "Lehrerstreik in Zürich", "summary": "..."}]
+    triggered, _ = mgr.evaluate_condition(alert, articles, avg_sentiment=None)
+    assert triggered is True
+    articles_no_match = [{"title": "Schöner Tag heute", "summary": "Gutes Wetter"}]
+    triggered, _ = mgr.evaluate_condition(alert, articles_no_match, avg_sentiment=None)
+    assert triggered is False
+
+def test_alert_mark_checked_updates_count(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert_id = mgr.create({"name": "T", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7, "condition_type": "volume_above",
+        "threshold": 5.0, "keyword": None})
+    mgr.mark_checked(alert_id, triggered=True)
+    alert = mgr.get(alert_id)
+    assert alert["trigger_count"] == 1
+    assert alert["last_checked"] is not None
+    assert alert["last_triggered"] is not None
+
