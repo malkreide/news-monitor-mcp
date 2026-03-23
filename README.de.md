@@ -9,6 +9,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
 [![Datenquelle](https://img.shields.io/badge/Daten-WorldNewsAPI-orange)](https://worldnewsapi.com/)
+![CI](https://github.com/malkreide/news-monitor-mcp/actions/workflows/ci.yml/badge.svg)
 
 > MCP-Server für globales Nachrichten-Monitoring, Medienanalyse und Sentiment-Tracking via WorldNewsAPI — Volltextsuche in 150+ Ländern, Sentiment-Analyse auf Deutsch und Englisch, Top-Schlagzeilen, GL-Briefings, Zeitungscovers und Geo-Suche. API-Schlüssel erforderlich.
 
