@@ -648,7 +648,7 @@ async def news_media_briefing(params: MediaBriefingInput) -> str:
     if not api_key: return _no_key_message("news_media_briefing")
     latest_dt = datetime.now()
     earliest_dt = latest_dt - timedelta(days=params.days_back)
-    lines = [f"# Medien-Briefing\n",
+    lines = ["# Medien-Briefing\n",
         f"**Zeitraum:** {earliest_dt.strftime('%d.%m.%Y')} – {latest_dt.strftime('%d.%m.%Y')} | "
         f"**Quellen:** {params.source_country} | **Sprache:** {params.language}\n", "---\n"]
     for topic in params.topics:
