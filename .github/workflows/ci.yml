@@ -28,7 +28,7 @@ jobs:
         run: uv pip install -e ".[dev]" --system
 
       - name: Linting mit ruff
-        run: ruff check src/
+        run: python -m ruff check src/
 
       - name: Syntax-Prüfung
         run: python -m py_compile src/news_monitor_mcp/server.py
@@ -54,6 +54,6 @@ jobs:
 
       - run: pip install ruff
 
-      - run: ruff check src/
+      - run: python -m ruff check src/
 
-      - run: ruff format --check src/
+      - run: python -m ruff format --check src/
