@@ -57,11 +57,15 @@ packages = ["src/news_monitor_mcp"]
 path = "src/news_monitor_mcp/__init__.py"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+ignore = [
+    "E501",  # Line too long — bewusst toleriert (lange Field-Beschreibungen)
+    "E701",  # Multiple statements on one line — Codestil im Server bewusst so
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
