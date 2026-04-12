@@ -28,14 +28,31 @@ Replace `Known Limitations` with an expanded `Safety, Limits & Responsible Use` 
 **Position:** Replaces existing `## Known Limitations` section (same location in document).
 **Applies to:** `README.md` (English) and `README.de.md` (German translation).
 
+#### German heading translations
+
+| English | German |
+|---|---|
+| `## Safety, Limits & Responsible Use` | `## Sicherheit, Grenzen & verantwortungsvoller Einsatz` |
+| `### Read-Only Operation` | `### Nur-Lese-Betrieb` |
+| `### API Rate Limits` | `### API-Rate-Limits` |
+| `### Data Privacy` | `### Datenschutz` |
+| `### Responsible Use` | `### Verantwortungsvoller Einsatz` |
+| `### Terms of Service` | `### Nutzungsbedingungen` |
+
+The body text of `README.de.md` should be translated to German throughout, matching the style of the existing German README. The table structure, link URLs, and code references (`readOnlyHint`, file paths, version tags) remain unchanged.
+
 #### Content Structure
 
 ```markdown
 ## Safety, Limits & Responsible Use
 
 ### Read-Only Operation
-All 9 monitoring tools carry `readOnlyHint: true` — the server never writes,
-modifies, or deletes any data. It only issues GET requests to WorldNewsAPI.
+12 of the 15 tools carry `readOnlyHint: true`. All 9 monitoring tools (search,
+headlines, sentiment, briefing, article, sources, front_pages, trend, geo) are
+fully read-only and issue GET requests to WorldNewsAPI only. The 3 exceptions
+are local-only operations: `news_alert_create` and `news_alert_delete` (write/
+delete `~/.news-monitor-mcp/alerts.json`) and `news_cache_clear` (clears
+in-memory cache). None of the 15 tools modify any external data source.
 
 ### API Rate Limits
 | Constraint | WorldNewsAPI Free Tier | Paid Plans |
@@ -97,6 +114,16 @@ Nothing is lost — all existing limitation info is preserved in richer context.
 
 Inserted **after the Features Table**, **before `## Data Sources`**:
 
+In `README.md` (English):
+```markdown
+## Demo
+
+![Media Briefing Demo](assets/demo-media-briefing.png)
+
+> *"Create a media briefing for: AI in education, Volksschule Zürich, school digitalisation"*
+```
+
+In `README.de.md` (German):
 ```markdown
 ## Demo
 
