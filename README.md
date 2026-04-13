@@ -256,12 +256,46 @@ WorldNewsAPI offers German-language sentiment analysis — rare among news APIs:
 
 ---
 
-## Known Limitations
+## Safety, Limits & Responsible Use
 
-- **Sentiment analysis:** Only German (`de`) and English (`en`) — no French or Italian
-- **Free tier:** 1,000 API calls/month, max 10 articles per call (paid plans: up to 100)
-- **Historical data:** Free tier limited to 30 days; paid plans offer extended history
-- **Source coverage:** Swiss regional media may be less well-indexed than national outlets
+### Read-Only Operation
+12 of the 15 tools carry `readOnlyHint: true`. All 9 monitoring tools (search,
+headlines, sentiment, briefing, article, sources, front_pages, trend, geo) are
+fully read-only and issue GET requests to WorldNewsAPI only. The 3 exceptions
+are local-only operations: `news_alert_create` and `news_alert_delete` (write/
+delete `~/.news-monitor-mcp/alerts.json`) and `news_cache_clear` (clears
+in-memory cache). None of the 15 tools modify any external data source.
+
+### API Rate Limits
+
+| Constraint | WorldNewsAPI Free Tier | Paid Plans |
+|---|---|---|
+| Calls/month | 1,000 | Up to 1M |
+| Articles/call | 10 | Up to 100 |
+| Historical depth | 30 days | Extended |
+| Timeout per call | 30 seconds | 30 seconds |
+
+The TTL cache (v0.2+) reduces redundant calls by up to 80%.
+
+### Data Privacy
+
+- **No personal data stored:** The server holds no persistent user data. Cache entries are in-memory and reset on server restart.
+- **No profiling:** The server retrieves publicly published journalism only. It is not designed for surveillance or personal profiling.
+- **Alert data:** Alert configurations are stored locally in `~/.news-monitor-mcp/alerts.json` — on your machine only, never transmitted.
+
+### Responsible Use
+
+- Query public news only — do not use as a profiling tool for individuals.
+- Sentiment scores reflect algorithmic analysis of journalistic tone, not verified editorial judgements.
+- Results depend on WorldNewsAPI's indexing; Swiss regional media may be less well-covered than national outlets.
+
+### Terms of Service
+
+Users must comply with:
+- [WorldNewsAPI Terms of Service](https://worldnewsapi.com/terms-of-service/)
+- [WorldNewsAPI Privacy Policy](https://worldnewsapi.com/privacy-policy/)
+
+This MCP server is an independent open-source project and is not affiliated with WorldNewsAPI.
 
 ---
 
