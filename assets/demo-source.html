@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>news-monitor-mcp Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .demo-wrapper {
+    width: 1200px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .demo-header {
+    background: #21262d;
+    border-bottom: 1px solid #30363d;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #febc2e; }
+  .dot-green { background: #28c840; }
+  .header-title {
+    margin-left: 8px;
+    color: #8b949e;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .panels {
+    display: grid;
+    grid-template-columns: 280px 380px 1fr;
+    min-height: 360px;
+  }
+  .panel {
+    padding: 20px;
+    border-right: 1px solid #30363d;
+  }
+  .panel:last-child { border-right: none; }
+  .panel-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #30363d;
+  }
+  /* User panel */
+  .panel-user { background: #161b22; }
+  .panel-user .panel-label { color: #8b949e; }
+  .user-bubble {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: #e6edf3;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .user-bubble strong { color: #79c0ff; }
+  /* Tool call panel */
+  .panel-tool { background: #161b22; }
+  .panel-tool .panel-label { color: #e3b341; }
+  .tool-block {
+    background: #0d1117;
+    border: 1px solid #f0883e44;
+    border-left: 3px solid #f0883e;
+    border-radius: 6px;
+    padding: 14px;
+    font-family: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #e6edf3;
+  }
+  .fn-name { color: #f0883e; font-weight: 700; }
+  .key { color: #79c0ff; }
+  .str { color: #a5d6ff; }
+  .bracket { color: #8b949e; }
+  /* Response panel */
+  .panel-response { background: #161b22; }
+  .panel-response .panel-label { color: #3fb950; }
+  .response-content { color: #e6edf3; font-size: 13.5px; line-height: 1.6; }
+  .response-content h1 {
+    font-size: 15px;
+    color: #e6edf3;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #30363d;
+  }
+  .topic-block { margin-bottom: 14px; }
+  .topic-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #e6edf3;
+    margin-bottom: 4px;
+  }
+  .topic-meta { font-size: 12px; color: #8b949e; margin-bottom: 6px; }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .badge-pos { background: #1a4a2e; color: #3fb950; }
+  .badge-neu { background: #1f2d3d; color: #79c0ff; }
+  .badge-neg { background: #3d1f22; color: #f85149; }
+  .article-link {
+    font-size: 12px;
+    color: #8b949e;
+    padding-left: 8px;
+    border-left: 2px solid #30363d;
+    margin-bottom: 3px;
+  }
+  .article-link a { color: #58a6ff; text-decoration: none; }
+  .divider { border: none; border-top: 1px solid #30363d; margin: 12px 0; }
+  .demo-footer {
+    background: #21262d;
+    border-top: 1px solid #30363d;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-tag {
+    font-size: 11px;
+    color: #8b949e;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .footer-tag span { color: #f0883e; }
+</style>
+</head>
+<body>
+<div class="demo-wrapper">
+  <div class="demo-header">
+    <div class="dot dot-red"></div>
+    <div class="dot dot-yellow"></div>
+    <div class="dot dot-green"></div>
+    <div class="header-title">Claude Desktop — news-monitor-mcp</div>
+  </div>
+
+  <div class="panels">
+    <!-- Panel 1: User -->
+    <div class="panel panel-user">
+      <div class="panel-label">👤 Anfrage</div>
+      <div class="user-bubble">
+        Erstelle ein <strong>Medien-Briefing</strong> für:<br><br>
+        • KI in Bildung<br>
+        • Volksschule Zürich<br>
+        • Schuldigitalisierung<br><br>
+        <span style="color:#8b949e;font-size:12px;">Letzte 7 Tage, DACH-Raum</span>
+      </div>
+    </div>
+
+    <!-- Panel 2: Tool Call -->
+    <div class="panel panel-tool">
+      <div class="panel-label">🔧 Tool Call</div>
+      <div class="tool-block">
+        <span class="fn-name">news_media_briefing</span><span class="bracket">(&#123;</span><br>
+        &nbsp;&nbsp;<span class="key">topics</span>: <span class="bracket">[</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"KI in Bildung"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"Volksschule Zürich"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"Schuldigitalisierung"</span><br>
+        &nbsp;&nbsp;<span class="bracket">]</span>,<br>
+        &nbsp;&nbsp;<span class="key">language</span>: <span class="str">"de"</span>,<br>
+        &nbsp;&nbsp;<span class="key">days_back</span>: <span class="str">7</span>,<br>
+        &nbsp;&nbsp;<span class="key">source_country</span>:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"ch,de,at"</span><br>
+        <span class="bracket">&#125;)</span>
+      </div>
+    </div>
+
+    <!-- Panel 3: Response -->
+    <div class="panel panel-response">
+      <div class="panel-label">🤖 Medien-Briefing</div>
+      <div class="response-content">
+        <h1>📋 Medien-Briefing — DACH | 7 Tage</h1>
+
+        <div class="topic-block">
+          <div class="topic-title">😊 KI in Bildung
+            <span class="badge badge-pos">positiv 0.31</span>
+          </div>
+          <div class="topic-meta">18 Artikel verfügbar</div>
+          <div class="article-link"><a href="#">SRF: «KI-Pilotprojekte an Zürcher Schulen starten»</a></div>
+          <div class="article-link"><a href="#">NZZ: «Chancen und Risiken von KI im Unterricht»</a></div>
+          <div class="article-link"><a href="#">Der Standard: «Österreich testet KI-Lernassistenten»</a></div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="topic-block">
+          <div class="topic-title">😐 Volksschule Zürich
+            <span class="badge badge-neu">neutral 0.04</span>
+          </div>
+          <div class="topic-meta">9 Artikel verfügbar</div>
+          <div class="article-link"><a href="#">Tages-Anzeiger: «Schulraumplanung im Fokus»</a></div>
+          <div class="article-link"><a href="#">ZüriToday: «Neue Lehrpläne ab Herbst»</a></div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="topic-block">
+          <div class="topic-title">😐 Schuldigitalisierung
+            <span class="badge badge-neu">neutral 0.12</span>
+          </div>
+          <div class="topic-meta">14 Artikel verfügbar</div>
+          <div class="article-link"><a href="#">Heise: «Digitalpakt Schweiz — Stand 2025»</a></div>
+          <div class="article-link"><a href="#">edu.ch: «BYOD-Rollout in 12 Kantonen»</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-footer">
+    <span class="footer-tag">🔧 <span>news_media_briefing</span></span>
+    <span class="footer-tag">🌍 <span>ch,de,at</span></span>
+    <span class="footer-tag">📅 <span>7 Tage</span></span>
+    <span class="footer-tag">⚡ <span>TTL-Cache aktiv</span></span>
+  </div>
+</div>
+</body>
+</html>
