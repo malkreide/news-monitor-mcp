@@ -53,6 +53,14 @@
 
 ---
 
+## Demo
+
+![Media Briefing Demo](assets/demo-media-briefing.png)
+
+> *"Erstelle ein Medien-Briefing für: KI in Bildung, Volksschule Zürich, Schuldigitalisierung"*
+
+---
+
 ## Datenquellen
 
 | Quelle | API-Typ | Inhalt |
