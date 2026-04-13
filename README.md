@@ -53,6 +53,14 @@
 
 ---
 
+## Demo
+
+![Media Briefing Demo](assets/demo-media-briefing.png)
+
+> *"Create a media briefing for: AI in education, Volksschule Zürich, school digitalisation"*
+
+---
+
 ## Data Sources
 
 | Source | API Type | Content |
