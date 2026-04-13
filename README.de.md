@@ -256,12 +256,46 @@ WorldNewsAPI bietet deutschsprachige Sentiment-Analyse — ein Alleinstellungsme
 
 ---
 
-## Bekannte Einschränkungen
+## Sicherheit, Grenzen & verantwortungsvoller Einsatz
 
-- **Sentiment-Analyse:** Nur Deutsch (`de`) und Englisch (`en`) — kein Französisch oder Italienisch
-- **Free Tier:** 1'000 API-Calls/Monat, max. 10 Artikel pro Call (kostenpflichtige Pläne: bis 100)
-- **Historiendaten:** Im Free Tier auf 30 Tage beschränkt; kostenpflichtige Pläne bieten längere History
-- **Quellabdeckung:** Schweizer Regionalmedien sind möglicherweise weniger gut indexiert als nationale Titel
+### Nur-Lese-Betrieb
+12 der 15 Tools tragen `readOnlyHint: true`. Alle 9 Monitoring-Tools (Suche,
+Headlines, Sentiment, Briefing, Artikel, Quellen, Titelseiten, Trends, Geo)
+sind vollständig schreibgeschützt und senden nur GET-Anfragen an die WorldNewsAPI.
+Die 3 Ausnahmen sind lokale Operationen: `news_alert_create` und `news_alert_delete`
+(schreiben/löschen `~/.news-monitor-mcp/alerts.json`) und `news_cache_clear`
+(leert den In-Memory-Cache). Keines der 15 Tools verändert externe Datenquellen.
+
+### API-Rate-Limits
+
+| Einschränkung | WorldNewsAPI Free Tier | Kostenpflichtige Pläne |
+|---|---|---|
+| Calls/Monat | 1'000 | Bis 1M |
+| Artikel/Call | 10 | Bis 100 |
+| Historische Tiefe | 30 Tage | Erweitert |
+| Timeout pro Call | 30 Sekunden | 30 Sekunden |
+
+Der TTL-Cache (v0.2+) reduziert redundante API-Calls um bis zu 80%.
+
+### Datenschutz
+
+- **Keine personenbezogenen Daten gespeichert:** Der Server speichert keine persistenten Nutzerdaten. Cache-Einträge liegen im Arbeitsspeicher und werden beim Serverneustart zurückgesetzt.
+- **Kein Profiling:** Der Server ruft ausschliesslich öffentlich erschienene Nachrichtenartikel ab. Er ist nicht für die Überwachung oder das Profiling von Personen konzipiert.
+- **Alert-Daten:** Alert-Konfigurationen werden lokal in `~/.news-monitor-mcp/alerts.json` gespeichert — ausschliesslich auf dem eigenen Gerät, niemals übertragen.
+
+### Verantwortungsvoller Einsatz
+
+- Nur öffentliche Nachrichten abfragen — nicht als Profiling-Tool für Einzelpersonen einsetzen.
+- Sentiment-Scores spiegeln die algorithmische Analyse des journalistischen Tons wider, keine verifizierten redaktionellen Urteile.
+- Ergebnisse hängen von der Indexierung durch WorldNewsAPI ab; Schweizer Regionalmedien sind möglicherweise weniger gut abgedeckt als nationale Titel.
+
+### Nutzungsbedingungen
+
+Nutzerinnen und Nutzer müssen folgende Bedingungen einhalten:
+- [WorldNewsAPI Nutzungsbedingungen](https://worldnewsapi.com/terms-of-service/)
+- [WorldNewsAPI Datenschutzerklärung](https://worldnewsapi.com/privacy-policy/)
+
+Dieser MCP-Server ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung mit WorldNewsAPI.
 
 ---
 
