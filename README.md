@@ -240,6 +240,8 @@ PYTHONPATH=src pytest tests/ -m "live"
 → news_front_pages(source_country="ch")
 ```
 
+→ [More use cases by audience](EXAMPLES.md) →
+
 ---
 
 ## Sentiment Analysis
