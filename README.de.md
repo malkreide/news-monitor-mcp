@@ -125,6 +125,8 @@ Sofort in Claude Desktop ausprobieren:
 | `NEWS_MONITOR_ALERTS_DIR` | `~/.news-monitor-mcp` | Verzeichnis für `alerts.json`. Das Parent-Verzeichnis darf kein Symlink sein (wird beim Start als Schutz gegen Path-Injection abgewiesen). File wird mit Mode `0o600`, Dir mit `0o700` angelegt. |
 | `NEWS_MONITOR_ALERTS_FILE` | – | *(Back-Compat)* expliziter Pfad zur Alert-Datei. Gleiche Symlink-Prüfung. Bevorzugt `NEWS_MONITOR_ALERTS_DIR`. |
 | `MCP_ALERT_RETENTION_DAYS` | `90` | Alerts älter als diese Anzahl Tage werden beim Server-Start gelöscht (Privacy-Default per [`docs/privacy-dsg.md`](docs/privacy-dsg.md)). `0` deaktiviert Retention. |
+| `MCP_CACHE_MAX_PER_TYPE` | `1000` | Maximale Cache-Einträge pro Tool-Typ. Wenn überschritten, wird der am längsten ungenutzte Eintrag dieses Typs verdrängt. `0` deaktiviert den Cap (unbegrenztes Wachstum — nur für kurzlebige Prozesse sicher). |
+| `MCP_CACHE_SWEEP_SECONDS` | `300` | Intervall für den Background-Task, der TTL-abgelaufene Cache-Einträge entfernt. `0` deaktiviert den Sweep (abgelaufene Einträge werden weiterhin lazy bei `news_cache_stats` aufgeräumt). |
 
 ### Claude Desktop Konfiguration
 

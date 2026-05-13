@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **LRU-Cap pro Tool-Typ + Background-Cache-Sweep.** Adressiert Teil 1 von `SCALE-STATEFUL` (high, Audit 2026-05-13): unbegrenztes In-Memory-Wachstum bei langer Laufzeit. `NewsCache` nutzt jetzt eine `OrderedDict` mit echtem LRU (`move_to_end` bei Hit); pro Tool-Typ greift ein Cap (`MCP_CACHE_MAX_PER_TYPE`, Default 1000, `0` aus). Ein Background-Task im `server_lifespan` ruft `evict_expired()` periodisch auf (`MCP_CACHE_SWEEP_SECONDS`, Default 300 s).
+- **`CacheBackend`-Protocol.** Strukturelle Schnittstelle (`get`/`set`/`clear`/`evict_expired`/`stats`); macht den Weg frei für einen späteren Redis-Backend ohne Tool-Code-Refactor.
+- **README-Scaling-Sektion** dokumentiert das single-replica-Modell, das Render-Free-Tier-Sleep-Verhalten und verweist auf den offenen Teil von `SCALE-STATEFUL`.
 - **`docs/privacy-dsg.md`** — Schweizer Datenschutz-Hinweis nach revDSG. Behebt das `high`-Finding `CH-DSG` (Audit 2026-05-13). Adressiert Rollen (Verantwortlicher / Auftragsbearbeiter), Rechtsgrundlagen, ADV-Pflicht gegenüber WorldNewsAPI, Drittlandtransfer (Art. 16 DSG / DPF), **Profiling-Disclaimer (Art. 5 lit. f DSG)**, Betroffenenrechte, Retention-Default und konkrete Schritte vor Produktiveinsatz.
 - **Alert-Retention via `MCP_ALERT_RETENTION_DAYS`** (Default `90` Tage, `0` deaktiviert). `AlertManager._prune_old_alerts()` läuft beim Start: Alerts mit `created_at` älter als die Frist werden gelöscht und das File neu geschrieben. Legacy-Alerts ohne `created_at` und korrupte Timestamps bleiben defensive erhalten.
 - **Profiling-Disclaimer** im Docstring von `news_sentiment_monitor` — der MCP-Client (also das LLM) bekommt den Hinweis bei jedem Tool-Lookup.

@@ -1164,6 +1164,214 @@ def test_ensure_secure_perms_sets_0o700_on_parent(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# SCALE-STATEFUL Tests (LRU cap + background sweep)
+# ---------------------------------------------------------------------------
+
+def test_cache_get_promotes_to_most_recently_used():
+    """Erfolgreicher get() schiebt den Key ans Ende der OrderedDict (LRU)."""
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=10)
+    cache.set("search", {"q": "a"}, {"v": 1})
+    cache.set("search", {"q": "b"}, {"v": 2})
+    cache.set("search", {"q": "c"}, {"v": 3})
+
+    # Access "a" -> wird most-recently-used
+    cache.get("search", {"q": "a"})
+
+    # Insertion-order-Vergleich via internal _store: "a" steht jetzt zuletzt
+    keys_in_order = list(cache._store.keys())
+    a_key = cache._make_key("search", {"q": "a"})
+    assert keys_in_order[-1] == a_key
+
+
+def test_cache_evicts_lru_when_cap_exceeded():
+    """Bei Cap-Erreichen wird der am laengsten ungenutzte Eintrag desselben Typs verdraengt."""
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=3)
+    cache.set("search", {"q": "a"}, {"v": 1})
+    cache.set("search", {"q": "b"}, {"v": 2})
+    cache.set("search", {"q": "c"}, {"v": 3})
+
+    # Access "a" -> bumpt es auf most-recent. "b" wird damit LRU.
+    cache.get("search", {"q": "a"})
+
+    # Neuer Eintrag triggert Cap-Eviction. "b" muss raus.
+    cache.set("search", {"q": "d"}, {"v": 4})
+
+    assert cache.get("search", {"q": "a"}) is not None
+    assert cache.get("search", {"q": "b"}) is None  # verdraengt
+    assert cache.get("search", {"q": "c"}) is not None
+    assert cache.get("search", {"q": "d"}) is not None
+
+
+def test_cache_cap_is_per_tool_type():
+    """Ein Cap-Hit auf 'search' verdraengt NICHT Eintraege anderer Typen."""
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=2)
+    cache.set("search", {"q": "a"}, {"v": 1})
+    cache.set("headlines", {"sc": "ch"}, {"v": 2})
+    cache.set("headlines", {"sc": "de"}, {"v": 3})
+
+    # Cap fuer 'search' ausschoepfen
+    cache.set("search", {"q": "b"}, {"v": 4})
+    cache.set("search", {"q": "c"}, {"v": 5})  # triggert Cap-Eviction auf 'search'
+
+    # headlines-Eintraege bleiben unangetastet
+    assert cache.get("headlines", {"sc": "ch"}) is not None
+    assert cache.get("headlines", {"sc": "de"}) is not None
+    # 'a' (das aelteste 'search') ist weg
+    assert cache.get("search", {"q": "a"}) is None
+
+
+def test_cache_cap_zero_disables_cap():
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=0)
+    for i in range(50):
+        cache.set("search", {"q": str(i)}, {"v": i})
+    assert len(cache._store) == 50
+
+
+def test_cache_stats_reports_cap_and_evictions():
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=2)
+    cache.set("search", {"q": "a"}, {"v": 1})
+    cache.set("search", {"q": "b"}, {"v": 2})
+    cache.set("search", {"q": "c"}, {"v": 3})  # evicts 'a'
+
+    stats = cache.stats()
+    assert stats["max_eintraege_pro_typ"] == 2
+    assert stats["verdraengt_durch_cap"] == 1
+
+
+def test_cache_update_existing_key_does_not_evict():
+    """Re-set desselben Keys aktualisiert in-place, ohne Cap-Eviction zu triggern."""
+    from news_monitor_mcp.server import NewsCache
+
+    cache = NewsCache(max_per_type=3)
+    cache.set("search", {"q": "a"}, {"v": 1})
+    cache.set("search", {"q": "b"}, {"v": 2})
+    cache.set("search", {"q": "c"}, {"v": 3})
+    # Update "a" — sollte nicht in den Cap-Pfad gehen
+    cache.set("search", {"q": "a"}, {"v": 99})
+    assert cache.get("search", {"q": "a"}) == {"v": 99}
+    assert cache.get("search", {"q": "b"}) is not None
+    assert cache.get("search", {"q": "c"}) is not None
+    assert cache.stats()["verdraengt_durch_cap"] == 0
+
+
+def test_get_cache_max_per_type_env_parsing(monkeypatch):
+    from news_monitor_mcp.server import (
+        _get_cache_max_per_type, CACHE_MAX_PER_TYPE_DEFAULT,
+    )
+    monkeypatch.delenv("MCP_CACHE_MAX_PER_TYPE", raising=False)
+    assert _get_cache_max_per_type() == CACHE_MAX_PER_TYPE_DEFAULT
+
+    monkeypatch.setenv("MCP_CACHE_MAX_PER_TYPE", "42")
+    assert _get_cache_max_per_type() == 42
+
+    monkeypatch.setenv("MCP_CACHE_MAX_PER_TYPE", "0")
+    assert _get_cache_max_per_type() == 0
+
+    monkeypatch.setenv("MCP_CACHE_MAX_PER_TYPE", "-7")
+    assert _get_cache_max_per_type() == 0
+
+    monkeypatch.setenv("MCP_CACHE_MAX_PER_TYPE", "abc")
+    assert _get_cache_max_per_type() == CACHE_MAX_PER_TYPE_DEFAULT
+
+
+def test_get_cache_sweep_seconds_env_parsing(monkeypatch):
+    from news_monitor_mcp.server import (
+        _get_cache_sweep_seconds, CACHE_SWEEP_SECONDS_DEFAULT,
+    )
+    monkeypatch.delenv("MCP_CACHE_SWEEP_SECONDS", raising=False)
+    assert _get_cache_sweep_seconds() == CACHE_SWEEP_SECONDS_DEFAULT
+
+    monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "60")
+    assert _get_cache_sweep_seconds() == 60
+
+    monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "0")
+    assert _get_cache_sweep_seconds() == 0
+
+    monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "nope")
+    assert _get_cache_sweep_seconds() == CACHE_SWEEP_SECONDS_DEFAULT
+
+
+@pytest.mark.asyncio
+async def test_cache_sweep_loop_calls_evict_expired():
+    """Der Background-Loop ruft tatsaechlich evict_expired() periodisch auf."""
+    import asyncio as _asyncio
+    from news_monitor_mcp.server import _cache_sweep_loop
+
+    calls = {"n": 0}
+
+    class _FakeCache:
+        def evict_expired(self) -> int:
+            calls["n"] += 1
+            return 0
+
+    task = _asyncio.create_task(_cache_sweep_loop(_FakeCache(), interval_seconds=0))
+    # interval=0 -> sleep(0) returns immediately. Let the loop spin a few times.
+    await _asyncio.sleep(0.02)
+    task.cancel()
+    try:
+        await task
+    except _asyncio.CancelledError:
+        pass
+    assert calls["n"] >= 2  # loop ran at least twice
+
+
+@pytest.mark.asyncio
+async def test_server_lifespan_starts_and_stops_sweep_task(monkeypatch):
+    """server_lifespan startet/stoppt den Cache-Sweep ohne Crash."""
+    import asyncio as _asyncio
+    import news_monitor_mcp.server as srv
+
+    monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "1")
+    if srv._client is not None:
+        await srv._client.aclose()
+        srv._client = None
+
+    async with srv.server_lifespan(srv.mcp):
+        running = [t for t in _asyncio.all_tasks() if t.get_name() == "cache-sweep"]
+        assert len(running) == 1
+
+    remaining = [t for t in _asyncio.all_tasks() if t.get_name() == "cache-sweep"]
+    assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_server_lifespan_sweep_zero_disables_task(monkeypatch):
+    """MCP_CACHE_SWEEP_SECONDS=0 startet keinen Background-Task."""
+    import asyncio as _asyncio
+    import news_monitor_mcp.server as srv
+
+    monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "0")
+    if srv._client is not None:
+        await srv._client.aclose()
+        srv._client = None
+
+    async with srv.server_lifespan(srv.mcp):
+        running = [t for t in _asyncio.all_tasks() if t.get_name() == "cache-sweep"]
+        assert running == []
+
+
+def test_news_cache_satisfies_cache_backend_protocol():
+    """Sanity-Check: NewsCache erfuellt das CacheBackend-Protocol strukturell."""
+    from news_monitor_mcp.server import CacheBackend, NewsCache
+
+    cache: CacheBackend = NewsCache()
+    # Static check is enough for Protocol; if attributes were missing,
+    # the assignment would still work at runtime, so probe the methods:
+    for method in ("get", "set", "clear", "evict_expired", "stats"):
+        assert callable(getattr(cache, method)), f"missing {method}"
+
+
+# ---------------------------------------------------------------------------
 # CH-DSG Retention Tests
 # ---------------------------------------------------------------------------
 
