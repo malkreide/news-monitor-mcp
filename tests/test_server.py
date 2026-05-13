@@ -500,3 +500,103 @@ def test_alert_mark_checked_updates_count(tmp_path):
     assert alert["last_checked"] is not None
     assert alert["last_triggered"] is not None
 
+
+# ---------------------------------------------------------------------------
+# HTTP-Auth-Middleware-Tests
+# ---------------------------------------------------------------------------
+
+from starlette.applications import Starlette
+from starlette.responses import PlainTextResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def _stub_app() -> Starlette:
+    async def hello(_request):
+        return PlainTextResponse("ok")
+    return Starlette(routes=[Route("/mcp", hello, methods=["GET", "POST"])])
+
+
+def test_bearer_middleware_rejects_missing_header():
+    from news_monitor_mcp.server import BearerAuthMiddleware
+    app = _stub_app()
+    app.add_middleware(BearerAuthMiddleware, token="secret-token")
+    client = TestClient(app)
+    r = client.get("/mcp")
+    assert r.status_code == 401
+    assert r.headers.get("www-authenticate") == "Bearer"
+
+
+def test_bearer_middleware_rejects_wrong_scheme():
+    from news_monitor_mcp.server import BearerAuthMiddleware
+    app = _stub_app()
+    app.add_middleware(BearerAuthMiddleware, token="secret-token")
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"Authorization": "Basic dXNlcjpwYXNz"})
+    assert r.status_code == 401
+
+
+def test_bearer_middleware_rejects_wrong_token():
+    from news_monitor_mcp.server import BearerAuthMiddleware
+    app = _stub_app()
+    app.add_middleware(BearerAuthMiddleware, token="secret-token")
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"Authorization": "Bearer wrong-token"})
+    assert r.status_code == 401
+
+
+def test_bearer_middleware_accepts_correct_token():
+    from news_monitor_mcp.server import BearerAuthMiddleware
+    app = _stub_app()
+    app.add_middleware(BearerAuthMiddleware, token="secret-token")
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"Authorization": "Bearer secret-token"})
+    assert r.status_code == 200
+    assert r.text == "ok"
+
+
+def test_origin_allowlist_passes_when_no_origin_header():
+    from news_monitor_mcp.server import OriginAllowlistMiddleware
+    app = _stub_app()
+    app.add_middleware(OriginAllowlistMiddleware,
+                       allowed_origins=frozenset({"https://claude.ai"}))
+    client = TestClient(app)
+    r = client.get("/mcp")
+    assert r.status_code == 200
+
+
+def test_origin_allowlist_blocks_unknown_origin():
+    from news_monitor_mcp.server import OriginAllowlistMiddleware
+    app = _stub_app()
+    app.add_middleware(OriginAllowlistMiddleware,
+                       allowed_origins=frozenset({"https://claude.ai"}))
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+
+
+def test_origin_allowlist_allows_known_origin():
+    from news_monitor_mcp.server import OriginAllowlistMiddleware
+    app = _stub_app()
+    app.add_middleware(OriginAllowlistMiddleware,
+                       allowed_origins=frozenset({"https://claude.ai"}))
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"Origin": "https://claude.ai"})
+    assert r.status_code == 200
+
+
+def test_parse_allowed_origins_handles_csv_and_whitespace():
+    from news_monitor_mcp.server import _parse_allowed_origins
+    assert _parse_allowed_origins(None) == frozenset()
+    assert _parse_allowed_origins("") == frozenset()
+    assert _parse_allowed_origins("https://a, https://b ,, ") == frozenset(
+        {"https://a", "https://b"})
+
+
+def test_build_http_app_layers_middlewares():
+    from news_monitor_mcp.server import build_http_app
+    app = build_http_app("secret", frozenset({"https://claude.ai"}))
+    middleware_classes = [m.cls.__name__ for m in app.user_middleware]
+    assert "BearerAuthMiddleware" in middleware_classes
+    assert "OriginAllowlistMiddleware" in middleware_classes
+
