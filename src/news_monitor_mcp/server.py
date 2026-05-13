@@ -165,6 +165,22 @@ CACHE_TTL: dict[str, int] = {
 
 ALERTS_DIR_DEFAULT = os.path.expanduser("~/.news-monitor-mcp")
 
+ALERT_RETENTION_DAYS_DEFAULT = 90
+
+
+def _get_alert_retention_days() -> int:
+    """Liest `MCP_ALERT_RETENTION_DAYS` aus dem Env. `0` deaktiviert Retention."""
+    raw = os.environ.get("MCP_ALERT_RETENTION_DAYS")
+    if raw is None:
+        return ALERT_RETENTION_DAYS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("MCP_ALERT_RETENTION_DAYS=%r ist keine Zahl – fallback auf %d Tage",
+                       raw, ALERT_RETENTION_DAYS_DEFAULT)
+        return ALERT_RETENTION_DAYS_DEFAULT
+    return max(value, 0)
+
 
 def _resolve_alerts_path() -> str:
     """Resolve und härte den Pfad zu alerts.json.
@@ -365,12 +381,50 @@ class AlertManager:
         Kill mid-write laesst die alte Version unveraendert.
     """
 
-    def __init__(self, file_path: str = ALERTS_FILE) -> None:
+    def __init__(self, file_path: str = ALERTS_FILE,
+                 retention_days: Optional[int] = None) -> None:
         self._file = file_path
         self._alerts: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
+        self._retention_days = (retention_days if retention_days is not None
+                                else _get_alert_retention_days())
         self._load()
+        pruned = self._prune_old_alerts()
+        if pruned:
+            logger.info("Alert-Retention: %d Alerts aelter als %d Tage geloescht",
+                        pruned, self._retention_days)
+            self._save()
         _ensure_secure_perms(self._file)
+
+    def _prune_old_alerts(self) -> int:
+        """Loescht Alerts deren `created_at` aelter als `retention_days` ist.
+
+        Returns:
+            Anzahl der entfernten Alerts. Wenn `retention_days == 0` oder kein
+            `created_at`-Feld vorhanden ist (Legacy-Format), passiert nichts.
+
+        Wichtig: die Frist beginnt mit `created_at`. `last_triggered`-Updates
+        verlaengern die Lebensdauer NICHT — das ist bewusst, weil sonst ein
+        permanent triggernder Alert ewig im System bliebe (Privacy-Risiko).
+        """
+        with self._lock:
+            if self._retention_days <= 0:
+                return 0
+            cutoff = datetime.now() - timedelta(days=self._retention_days)
+            to_remove = []
+            for alert_id, alert in self._alerts.items():
+                created_raw = alert.get("created_at")
+                if not created_raw:
+                    continue  # Legacy: kein Timestamp -> behalten
+                try:
+                    created = datetime.fromisoformat(created_raw)
+                except ValueError:
+                    continue  # ungueltiger Timestamp -> behalten, nicht crashen
+                if created < cutoff:
+                    to_remove.append(alert_id)
+            for alert_id in to_remove:
+                del self._alerts[alert_id]
+            return len(to_remove)
 
     def _load(self) -> None:
         if os.path.exists(self._file):
@@ -866,6 +920,13 @@ async def news_sentiment_monitor(params: SentimentMonitorInput) -> str:
     """Sentiment-Analyse der Medienberichterstattung (Cache-TTL: 60 Min).
 
     Analysiert die emotionale Tonalitaet der Berichterstattung. Nur DE und EN.
+
+    ⚠️ DATENSCHUTZ-HINWEIS (revDSG, Schweiz): Sentiment-Analyse auf eine
+    namentlich genannte Person stellt Profiling nach Art. 5 lit. f DSG dar.
+    Vor produktivem Einsatz mit Personenbezug: Datenschutz-Folgenabschaetzung
+    (Art. 22 DSG) und Informationspflicht (Art. 19 DSG) pruefen. Empfehlung:
+    nur auf Institutionen / Themen, nicht auf einzelne Personen anwenden.
+    Siehe docs/privacy-dsg.md fuer Details.
 
     Args:
         params (SentimentMonitorInput): entity, language (de/en), days_back,

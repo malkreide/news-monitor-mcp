@@ -124,6 +124,7 @@ Sofort in Claude Desktop ausprobieren:
 | `LOG_LEVEL` | `INFO` | Log-Level: `DEBUG` / `INFO` / `WARNING` / `ERROR`. Logs werden als JSON nach stderr geschrieben; `api-key=`-Query-Parameter und `Authorization: Bearer`-Header werden automatisch maskiert. |
 | `NEWS_MONITOR_ALERTS_DIR` | `~/.news-monitor-mcp` | Verzeichnis für `alerts.json`. Das Parent-Verzeichnis darf kein Symlink sein (wird beim Start als Schutz gegen Path-Injection abgewiesen). File wird mit Mode `0o600`, Dir mit `0o700` angelegt. |
 | `NEWS_MONITOR_ALERTS_FILE` | – | *(Back-Compat)* expliziter Pfad zur Alert-Datei. Gleiche Symlink-Prüfung. Bevorzugt `NEWS_MONITOR_ALERTS_DIR`. |
+| `MCP_ALERT_RETENTION_DAYS` | `90` | Alerts älter als diese Anzahl Tage werden beim Server-Start gelöscht (Privacy-Default per [`docs/privacy-dsg.md`](docs/privacy-dsg.md)). `0` deaktiviert Retention. |
 
 ### Claude Desktop Konfiguration
 
@@ -363,6 +364,7 @@ Dieser MCP-Server ist ein unabhängiges Open-Source-Projekt und steht in keiner 
 
 - Schwachstellen privat melden: siehe [SECURITY.md](SECURITY.md)
 - Schweizer Behörden-Einsatz: [`docs/isds-klassifikation.md`](docs/isds-klassifikation.md) (ISDS / Schutzbedarfsfeststellung)
+- Schweizer Datenschutz (revDSG) — Pflichten, Profiling, Retention, Drittlandtransfer: [`docs/privacy-dsg.md`](docs/privacy-dsg.md)
 - Audit-Historie: [`audits/`](audits/)
 
 ---

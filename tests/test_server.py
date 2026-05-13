@@ -1164,6 +1164,161 @@ def test_ensure_secure_perms_sets_0o700_on_parent(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# CH-DSG Retention Tests
+# ---------------------------------------------------------------------------
+
+def test_get_alert_retention_days_default(monkeypatch):
+    from news_monitor_mcp.server import _get_alert_retention_days, ALERT_RETENTION_DAYS_DEFAULT
+    monkeypatch.delenv("MCP_ALERT_RETENTION_DAYS", raising=False)
+    assert _get_alert_retention_days() == ALERT_RETENTION_DAYS_DEFAULT
+
+
+def test_get_alert_retention_days_honors_env(monkeypatch):
+    from news_monitor_mcp.server import _get_alert_retention_days
+    monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "30")
+    assert _get_alert_retention_days() == 30
+
+
+def test_get_alert_retention_days_accepts_zero_to_disable(monkeypatch):
+    from news_monitor_mcp.server import _get_alert_retention_days
+    monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "0")
+    assert _get_alert_retention_days() == 0
+
+
+def test_get_alert_retention_days_clamps_negative(monkeypatch):
+    from news_monitor_mcp.server import _get_alert_retention_days
+    monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "-5")
+    assert _get_alert_retention_days() == 0
+
+
+def test_get_alert_retention_days_falls_back_on_garbage(monkeypatch):
+    from news_monitor_mcp.server import _get_alert_retention_days, ALERT_RETENTION_DAYS_DEFAULT
+    monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "notanumber")
+    assert _get_alert_retention_days() == ALERT_RETENTION_DAYS_DEFAULT
+
+
+def test_alert_manager_prunes_old_alerts_on_load(tmp_path):
+    """Alerts mit created_at older als retention_days werden beim __init__ entfernt."""
+    import json as _json
+    from datetime import datetime, timedelta
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    old_ts = (datetime.now() - timedelta(days=120)).isoformat()
+    fresh_ts = (datetime.now() - timedelta(days=10)).isoformat()
+    target.write_text(_json.dumps({
+        "alert_old": {"id": "alert_old", "name": "stale", "created_at": old_ts,
+                      "entity": "x", "language": "de", "days_back": 7,
+                      "source_country": "ch", "condition_type": "volume_above",
+                      "threshold": 1.0, "keyword": None,
+                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
+        "alert_new": {"id": "alert_new", "name": "fresh", "created_at": fresh_ts,
+                      "entity": "y", "language": "de", "days_back": 7,
+                      "source_country": "ch", "condition_type": "volume_above",
+                      "threshold": 1.0, "keyword": None,
+                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
+    }), encoding="utf-8")
+
+    mgr = AlertManager(file_path=str(target), retention_days=90)
+    ids = {a["id"] for a in mgr.list_all()}
+    assert "alert_new" in ids
+    assert "alert_old" not in ids
+
+
+def test_alert_manager_persists_pruned_state_to_disk(tmp_path):
+    """Pruning beim Start muss auch ins File geschrieben werden."""
+    import json as _json
+    from datetime import datetime, timedelta
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    old_ts = (datetime.now() - timedelta(days=120)).isoformat()
+    target.write_text(_json.dumps({
+        "alert_old": {"id": "alert_old", "name": "stale", "created_at": old_ts,
+                      "entity": "x", "language": "de", "days_back": 7,
+                      "source_country": "ch", "condition_type": "volume_above",
+                      "threshold": 1.0, "keyword": None,
+                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
+    }), encoding="utf-8")
+
+    AlertManager(file_path=str(target), retention_days=90)
+
+    on_disk = _json.loads(target.read_text(encoding="utf-8"))
+    assert on_disk == {}
+
+
+def test_alert_manager_retention_zero_disables_pruning(tmp_path):
+    import json as _json
+    from datetime import datetime, timedelta
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    old_ts = (datetime.now() - timedelta(days=999)).isoformat()
+    target.write_text(_json.dumps({
+        "alert_ancient": {"id": "alert_ancient", "name": "ancient", "created_at": old_ts,
+                          "entity": "x", "language": "de", "days_back": 7,
+                          "source_country": "ch", "condition_type": "volume_above",
+                          "threshold": 1.0, "keyword": None,
+                          "last_checked": None, "last_triggered": None, "trigger_count": 0},
+    }), encoding="utf-8")
+
+    mgr = AlertManager(file_path=str(target), retention_days=0)
+    assert len(mgr.list_all()) == 1
+
+
+def test_alert_manager_keeps_alerts_without_created_at(tmp_path):
+    """Legacy-Alerts ohne created_at-Feld werden NICHT geloescht."""
+    import json as _json
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    target.write_text(_json.dumps({
+        "alert_legacy": {"id": "alert_legacy", "name": "legacy",
+                         "entity": "x", "language": "de", "days_back": 7,
+                         "source_country": "ch", "condition_type": "volume_above",
+                         "threshold": 1.0, "keyword": None,
+                         "last_checked": None, "last_triggered": None, "trigger_count": 0},
+    }), encoding="utf-8")
+
+    mgr = AlertManager(file_path=str(target), retention_days=1)
+    assert len(mgr.list_all()) == 1
+
+
+def test_alert_manager_keeps_alerts_with_invalid_timestamp(tmp_path):
+    """Korrupte created_at-Werte lassen den Alert in Ruhe (defensive)."""
+    import json as _json
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    target.write_text(_json.dumps({
+        "alert_corrupt": {"id": "alert_corrupt", "name": "corrupt",
+                          "created_at": "not-a-timestamp",
+                          "entity": "x", "language": "de", "days_back": 7,
+                          "source_country": "ch", "condition_type": "volume_above",
+                          "threshold": 1.0, "keyword": None,
+                          "last_checked": None, "last_triggered": None, "trigger_count": 0},
+    }), encoding="utf-8")
+
+    mgr = AlertManager(file_path=str(target), retention_days=1)
+    assert len(mgr.list_all()) == 1
+
+
+def test_alert_manager_retention_keeps_recently_created(tmp_path):
+    """Ein eben erstellter Alert ueberlebt jede Retention-Frist > 0."""
+    from news_monitor_mcp.server import AlertManager
+
+    target = tmp_path / "alerts.json"
+    mgr = AlertManager(file_path=str(target), retention_days=1)
+    mgr.create({"name": "Fresh", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+
+    # Re-open mit retention=1 day -> created_at ist now(), bleibt
+    mgr2 = AlertManager(file_path=str(target), retention_days=1)
+    assert len(mgr2.list_all()) == 1
+
+
+# ---------------------------------------------------------------------------
 # HITL-DESTRUCTIVE Tests
 # ---------------------------------------------------------------------------
 

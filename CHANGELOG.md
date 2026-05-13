@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`docs/privacy-dsg.md`** — Schweizer Datenschutz-Hinweis nach revDSG. Behebt das `high`-Finding `CH-DSG` (Audit 2026-05-13). Adressiert Rollen (Verantwortlicher / Auftragsbearbeiter), Rechtsgrundlagen, ADV-Pflicht gegenüber WorldNewsAPI, Drittlandtransfer (Art. 16 DSG / DPF), **Profiling-Disclaimer (Art. 5 lit. f DSG)**, Betroffenenrechte, Retention-Default und konkrete Schritte vor Produktiveinsatz.
+- **Alert-Retention via `MCP_ALERT_RETENTION_DAYS`** (Default `90` Tage, `0` deaktiviert). `AlertManager._prune_old_alerts()` läuft beim Start: Alerts mit `created_at` älter als die Frist werden gelöscht und das File neu geschrieben. Legacy-Alerts ohne `created_at` und korrupte Timestamps bleiben defensive erhalten.
+- **Profiling-Disclaimer** im Docstring von `news_sentiment_monitor` — der MCP-Client (also das LLM) bekommt den Hinweis bei jedem Tool-Lookup.
 - **`SECURITY.md`** mit Private-Vulnerability-Reporting-Anleitung, Response-SLAs, Scope und Hardening-Baseline. Behebt das `low`-Finding `OPS-SECURITY-POLICY` (Audit 2026-05-13).
 - **`.github/dependabot.yml`** für wöchentliche Updates von `pip`, `github-actions` und `docker` Dependencies (Montag 06:00 Europe/Zurich, max. 5/3/3 offene PRs).
 - **`docs/isds-klassifikation.md`** — Schutzbedarfsfeststellung (Vertraulichkeit/Integrität/Verfügbarkeit), Verarbeitungsorte-Diagramm, Drittlandtransfer-Hinweis (Art. 16 DSG), Profiling-Klausel (Art. 5 lit. f DSG), Retention-Tabelle. Behebt `CH-ISDS` (medium).
