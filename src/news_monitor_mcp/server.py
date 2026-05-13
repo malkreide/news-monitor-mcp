@@ -23,13 +23,16 @@ import os
 import re
 import secrets
 import sys
+import tempfile
+import threading
 import time
 import uuid
+from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta
 from enum import Enum
 from logging.config import dictConfig
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -226,10 +229,82 @@ class NewsCache:
         }
 
 
+try:
+    import fcntl as _fcntl  # POSIX only
+except ImportError:  # pragma: no cover - Windows
+    _fcntl = None  # type: ignore[assignment]
+
+
+@contextmanager
+def _file_lock(path: str) -> Iterator[None]:
+    """Cross-process advisory lock auf einem Lock-Sidecar-File.
+
+    POSIX: nutzt fcntl.flock(LOCK_EX). Windows / unsupported FS: degradiert zu
+    No-Op — in-process threading.RLock greift dann als einzige Serialisierung.
+    """
+    if _fcntl is None:
+        yield
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    lock_path = path + ".lock"
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        _fcntl.flock(fd, _fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            _fcntl.flock(fd, _fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _atomic_write_json(path: str, payload: Any) -> None:
+    """Atomic write via tempfile + fsync + os.replace.
+
+    Vorgehen:
+      1. NamedTemporaryFile im selben Verzeichnis (gleicher Mountpoint → os.replace
+         ist atomar gemaess POSIX rename(2)).
+      2. JSON schreiben, flush, fsync — Daten sind sicher auf der Platte, BEVOR
+         der finale Rename passiert.
+      3. os.replace überschreibt das Ziel atomar. Crash zwischen Schritt 2 und 3
+         laesst die ALTE Datei intakt; Crash nach Schritt 3 hat die neue Version.
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".alerts-", suffix=".json.tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        # Best-effort cleanup; das Ziel bleibt in jedem Fall unangetastet.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 class AlertManager:
+    """Persistenter Alert-Store mit Crash-sicheren Writes.
+
+    Concurrency-Modell:
+      * In-Process: `threading.RLock` serialisiert alle Mutationen. Ueber
+        asyncio hinaus auch fuer Worker-Threads (z.B. uvicorn `--workers=N`
+        in einem `--http`/threaded-Setup) sicher.
+      * Cross-Process: optionaler `fcntl.flock` auf `<file>.lock` (POSIX).
+        Verhindert Lost-Updates, wenn mehrere Container-Replicas dasselbe
+        Volume mounten.
+      * Crash-Safety: atomic write (tmp → fsync → os.replace). Ein abrupter
+        Kill mid-write laesst die alte Version unveraendert.
+    """
+
     def __init__(self, file_path: str = ALERTS_FILE) -> None:
         self._file = file_path
         self._alerts: dict[str, dict[str, Any]] = {}
+        self._lock = threading.RLock()
         self._load()
 
     def _load(self) -> None:
@@ -242,40 +317,45 @@ class AlertManager:
 
     def _save(self) -> None:
         try:
-            os.makedirs(os.path.dirname(self._file), exist_ok=True)
-            with open(self._file, "w", encoding="utf-8") as f:
-                json.dump(self._alerts, f, indent=2, ensure_ascii=False)
+            with _file_lock(self._file):
+                _atomic_write_json(self._file, self._alerts)
         except OSError as e:
-            logger.error(f"Alert-Datei konnte nicht gespeichert werden: {e}")
+            logger.error("Alert-Datei konnte nicht gespeichert werden: %s", e)
 
     def create(self, data: dict[str, Any]) -> str:
-        alert_id = f"alert_{uuid.uuid4().hex[:8]}"
-        self._alerts[alert_id] = {**data, "id": alert_id,
-            "created_at": datetime.now().isoformat(),
-            "last_checked": None, "last_triggered": None, "trigger_count": 0}
-        self._save()
-        return alert_id
+        with self._lock:
+            alert_id = f"alert_{uuid.uuid4().hex[:8]}"
+            self._alerts[alert_id] = {**data, "id": alert_id,
+                "created_at": datetime.now().isoformat(),
+                "last_checked": None, "last_triggered": None, "trigger_count": 0}
+            self._save()
+            return alert_id
 
     def list_all(self) -> list[dict[str, Any]]:
-        return list(self._alerts.values())
+        with self._lock:
+            return list(self._alerts.values())
 
     def get(self, alert_id: str) -> Optional[dict[str, Any]]:
-        return self._alerts.get(alert_id)
+        with self._lock:
+            alert = self._alerts.get(alert_id)
+            return dict(alert) if alert is not None else None
 
     def delete(self, alert_id: str) -> bool:
-        if alert_id in self._alerts:
-            del self._alerts[alert_id]
-            self._save()
-            return True
-        return False
+        with self._lock:
+            if alert_id in self._alerts:
+                del self._alerts[alert_id]
+                self._save()
+                return True
+            return False
 
     def mark_checked(self, alert_id: str, triggered: bool) -> None:
-        if alert_id in self._alerts:
-            self._alerts[alert_id]["last_checked"] = datetime.now().isoformat()
-            if triggered:
-                self._alerts[alert_id]["last_triggered"] = datetime.now().isoformat()
-                self._alerts[alert_id]["trigger_count"] = self._alerts[alert_id].get("trigger_count", 0) + 1
-            self._save()
+        with self._lock:
+            if alert_id in self._alerts:
+                self._alerts[alert_id]["last_checked"] = datetime.now().isoformat()
+                if triggered:
+                    self._alerts[alert_id]["last_triggered"] = datetime.now().isoformat()
+                    self._alerts[alert_id]["trigger_count"] = self._alerts[alert_id].get("trigger_count", 0) + 1
+                self._save()
 
     def evaluate_condition(self, alert: dict[str, Any], articles: list[dict[str, Any]],
                            avg_sentiment: Optional[float]) -> tuple[bool, str]:

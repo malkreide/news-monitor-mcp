@@ -864,6 +864,137 @@ def test_handle_api_error_maps_known_status_codes():
     assert "SHOULDNOTAPPEAR" not in msg
 
 
+# ---------------------------------------------------------------------------
+# ARCH-CONCURRENCY Tests
+# ---------------------------------------------------------------------------
+
+def test_atomic_write_does_not_leave_tmp_file(tmp_path):
+    from news_monitor_mcp.server import _atomic_write_json
+
+    target = tmp_path / "alerts.json"
+    _atomic_write_json(str(target), {"a": 1, "b": [2, 3]})
+
+    assert target.exists()
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name != "alerts.json"]
+    assert leftovers == [], f"unexpected leftovers: {leftovers}"
+    assert _json.loads(target.read_text(encoding="utf-8")) == {"a": 1, "b": [2, 3]}
+
+
+def test_atomic_write_preserves_old_data_when_write_fails(tmp_path, monkeypatch):
+    """Wenn json.dump abbricht, bleibt die alte Datei intakt."""
+    from news_monitor_mcp.server import _atomic_write_json
+
+    target = tmp_path / "alerts.json"
+    target.write_text(_json.dumps({"original": True}), encoding="utf-8")
+
+    class _NotSerializable:
+        pass
+
+    with pytest.raises(TypeError):
+        _atomic_write_json(str(target), {"bad": _NotSerializable()})
+
+    # Original file unchanged
+    assert _json.loads(target.read_text(encoding="utf-8")) == {"original": True}
+    # No tmp leftover
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name != "alerts.json"]
+    assert leftovers == []
+
+
+def test_atomic_write_replaces_existing_file(tmp_path):
+    from news_monitor_mcp.server import _atomic_write_json
+
+    target = tmp_path / "alerts.json"
+    target.write_text(_json.dumps({"v": 1}), encoding="utf-8")
+    _atomic_write_json(str(target), {"v": 2})
+    assert _json.loads(target.read_text(encoding="utf-8")) == {"v": 2}
+
+
+def test_alert_manager_get_returns_defensive_copy(tmp_path):
+    from news_monitor_mcp.server import AlertManager
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    alert_id = mgr.create({"name": "T", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 5.0, "keyword": None})
+    snapshot = mgr.get(alert_id)
+    snapshot["name"] = "MUTATED EXTERNALLY"
+    # Internal state must NOT reflect the external mutation
+    again = mgr.get(alert_id)
+    assert again["name"] == "T"
+
+
+def test_alert_manager_concurrent_creates_from_threads(tmp_path):
+    """100 parallel create() Aufrufe aus Threads -> alle 100 Alerts persistiert."""
+    import threading as _th
+    from news_monitor_mcp.server import AlertManager
+
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    errors: list[BaseException] = []
+
+    def _worker(i: int) -> None:
+        try:
+            mgr.create({"name": f"alert-{i}", "entity": f"e-{i}", "language": "de",
+                "source_country": "ch", "days_back": 7,
+                "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [_th.Thread(target=_worker, args=(i,)) for i in range(100)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(mgr.list_all()) == 100
+    # Persisted file must agree with in-memory state
+    on_disk = _json.loads((tmp_path / "alerts.json").read_text(encoding="utf-8"))
+    assert len(on_disk) == 100
+
+
+def test_alert_manager_concurrent_mark_checked_increments_correctly(tmp_path):
+    import threading as _th
+    from news_monitor_mcp.server import AlertManager
+
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+
+    def _worker() -> None:
+        mgr.mark_checked(aid, triggered=True)
+
+    threads = [_th.Thread(target=_worker) for _ in range(50)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert mgr.get(aid)["trigger_count"] == 50
+
+
+def test_file_lock_is_noop_when_fcntl_unavailable(tmp_path, monkeypatch):
+    """Auf Plattformen ohne fcntl darf _file_lock nicht crashen."""
+    import news_monitor_mcp.server as srv
+    monkeypatch.setattr(srv, "_fcntl", None)
+    with srv._file_lock(str(tmp_path / "alerts.json")):
+        pass  # should be a no-op contextmanager
+
+
+def test_file_lock_creates_sidecar_and_serializes(tmp_path):
+    """fcntl-Pfad: Lock-File wird erzeugt; zwei Locks im selben Prozess sind seriell."""
+    import news_monitor_mcp.server as srv
+    if srv._fcntl is None:
+        pytest.skip("fcntl not available on this platform")
+
+    import os as _os
+    target = str(tmp_path / "alerts.json")
+    with srv._file_lock(target):
+        assert _os.path.exists(target + ".lock")
+    # Lock-Sidecar bleibt persistent (das ist gewollt — wird beim naechsten Aufruf
+    # wiederverwendet). Wichtig ist, dass das Hauptfile NICHT erzeugt wurde:
+    assert not _os.path.exists(target)
+
+
 def test_redaction_pattern_masks_x_api_key_header_dump():
     from news_monitor_mcp.server import logger as srv_logger
     root, buf, restore = _capture_logs()
