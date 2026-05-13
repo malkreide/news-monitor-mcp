@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial PyPI publication
 
-## [Unreleased]
+## [0.3.0] - 2026-05-13
+
+Security & compliance release. Closes 16 of 17 findings from the
+[mcp-audit-skill audit 2026-05-13](audits/2026-05-13-news-monitor-mcp/audit-report.md);
+SCALE-STATEFUL remains partially closed (LRU + sweep + protocol shipped, Redis
+backend deferred).
 
 ### Refactored
 - **`server.py` aufgeteilt (1724 → 180 LoC).** Behebt das `medium`-Finding `ARCH-MONOLITHIC` (Audit 2026-05-13). Reiner Refactor ohne Verhaltensänderung — alle 110 Tests laufen weiter grün. Neue Modul-Aufteilung:
