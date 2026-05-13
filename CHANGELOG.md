@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`Dockerfile` + `.dockerignore` + CI-Docker-Build-Job.** Behebt das `medium`-Finding `SCALE-NO-DOCKERFILE` (Audit 2026-05-13). Multi-Stage-Build auf `python:3.12-slim`, läuft als non-root UID `10001`, default `--http` mit `MCP_HOST=0.0.0.0`, persistiert Alerts in `/data`. CI baut das Image und prüft per Smoke-Test, dass `news-monitor-mcp --help` durchläuft und der Container ohne `MCP_BEARER_TOKEN` mit Exit-Code 2 abbricht (Härtung aus PR #2 wird also auch im Container-Pfad verifiziert).
+
 ### Changed
 - **`mcp>=1.0.0`** statt `fastmcp>=2.0.0` als deklarierte Dependency. Behebt das `medium`-Finding `SDK-DEP-MISMATCH` (Audit 2026-05-13): der Code importiert ausschliesslich `mcp.server.fastmcp.FastMCP` aus dem offiziellen MCP-SDK; das standalone `fastmcp`-Paket wurde nie verwendet.
 - **`hashlib.sha256` statt `hashlib.md5`** für Cache-Keys. Behebt `SEC-MD5` (low): kein FIPS-Mode-Block mehr, kein Bandit-/ruff-S324-Noise.
