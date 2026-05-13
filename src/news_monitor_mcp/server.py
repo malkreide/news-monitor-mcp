@@ -153,7 +153,7 @@ def build_http_app(token: str, allowed_origins: frozenset[str]) -> Any:
 def main() -> None:
     """Startet den News Monitor MCP Server."""
     import argparse
-    parser = argparse.ArgumentParser(description="News Monitor MCP Server v0.2.0")
+    parser = argparse.ArgumentParser(description="News Monitor MCP Server v0.3.0")
     parser.add_argument("--http", action="store_true", help="HTTP-Server statt stdio")
     parser.add_argument("--host", default=os.environ.get("MCP_HOST", "127.0.0.1"),
                         help="HTTP-Host (Standard: 127.0.0.1; fuer Container: 0.0.0.0)")
