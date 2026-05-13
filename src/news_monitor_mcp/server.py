@@ -174,8 +174,11 @@ class NewsCache:
         self._misses = 0
 
     def _make_key(self, tool_type: str, params: dict[str, Any]) -> str:
+        # sha256 statt md5: kein FIPS-Block (RHEL/CentOS mit fips-mode) und keine
+        # Bandit/ruff-S324-Warnung. Cache-Key ist kein Crypto-Use-Case, aber sha256
+        # ist hier ohne messbare Performance-Kosten der saubere Default.
         raw = json.dumps({"t": tool_type, "p": params}, sort_keys=True, ensure_ascii=False)
-        return hashlib.md5(raw.encode("utf-8")).hexdigest()
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def get(self, tool_type: str, params: dict[str, Any]) -> Optional[Any]:
         key = self._make_key(tool_type, params)
