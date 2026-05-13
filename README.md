@@ -124,6 +124,7 @@ Try it immediately in Claude Desktop:
 | `LOG_LEVEL` | `INFO` | Log level: `DEBUG` / `INFO` / `WARNING` / `ERROR`. Logs are emitted as JSON to stderr with automatic redaction of `api-key=` query params and `Authorization: Bearer` headers. |
 | `NEWS_MONITOR_ALERTS_DIR` | `~/.news-monitor-mcp` | Directory that holds `alerts.json`. The parent dir must not be a symlink (refused at startup as a defense against path-injection). File is created with mode `0o600`, directory with `0o700`. |
 | `NEWS_MONITOR_ALERTS_FILE` | – | *(Back-compat)* explicit path to the alerts file. Same symlink check applies. Prefer `NEWS_MONITOR_ALERTS_DIR`. |
+| `MCP_ALERT_RETENTION_DAYS` | `90` | Alerts older than this many days are deleted on server start (Privacy default per [`docs/privacy-dsg.md`](docs/privacy-dsg.md)). Set to `0` to disable retention. |
 
 ### Claude Desktop Configuration
 
@@ -369,6 +370,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 - Report vulnerabilities privately: see [SECURITY.md](SECURITY.md)
 - Swiss public-sector deployment: see [`docs/isds-klassifikation.md`](docs/isds-klassifikation.md) for the ISDS / Schutzbedarfsfeststellung
+- Swiss data protection (revDSG) — duties, profiling, retention, drittlandtransfer: [`docs/privacy-dsg.md`](docs/privacy-dsg.md)
 - Audit history: [`audits/`](audits/)
 
 ---
