@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Default-Host auf `127.0.0.1`** gewechselt (vorher `0.0.0.0`). Für Container-Deployments via `--host 0.0.0.0` oder `MCP_HOST=0.0.0.0` explizit setzen.
 - **Log-Maskierung:** `api-key=...`-Query-Parameter und `Authorization: Bearer ...`-Header werden in allen Log-Records automatisch durch `***` ersetzt. Reduziert die Leak-Oberfläche aus `SEC-API-KEY-HANDLING` schon vor dem dedizierten Fix.
 
+### Fixed
+- **`alerts.json` wird jetzt atomar geschrieben** (tmpfile + `fsync` + `os.replace`). Behebt das `high`-Finding `ARCH-CONCURRENCY` (Audit 2026-05-13): ein abrupter Kill mid-write lässt die alte Version intakt; vorher konnte ein Crash zwischen `open(w)` und `json.dump` die Datei leer hinterlassen und alle Alerts unwiederbringlich löschen.
+- **`AlertManager`-Mutationen sind jetzt mit `threading.RLock` serialisiert.** Verhindert Lost-Updates bei parallelen `create()`/`mark_checked()`/`delete()`-Aufrufen aus mehreren Worker-Threads.
+- **Cross-Process-Schutz via `fcntl.flock`** auf einem `<file>.lock`-Sidecar (POSIX). Wenn mehrere Container-Replicas dasselbe Volume mounten, verhindert das Lost-Updates zwischen Prozessen. Auf Windows degradiert es zu No-Op (in-process-Lock bleibt aktiv).
+- **`AlertManager.get()` liefert defensive Kopien.** External-Mutation kann den internen Zustand nicht mehr verändern.
+
 ### Added
 - **Strukturiertes JSON-Logging** mit Request-ID-Propagation (Finding `OBS-LOG-UNSTRUCTURED`, Audit 2026-05-13):
   - `configure_logging()` setzt JSON-Formatter, `LOG_LEVEL`-Env-Variable, `_RequestIdFilter` und `_RedactionFilter` idempotent auf.
