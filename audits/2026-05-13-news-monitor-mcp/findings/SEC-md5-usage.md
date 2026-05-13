@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #6.
+
 # Finding: SEC-MD5 — `hashlib.md5` ohne `usedforsecurity=False`
 
 | Feld | Wert |

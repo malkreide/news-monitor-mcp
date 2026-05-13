@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #10.
+
 # Finding: OPS-SECURITY-POLICY — `SECURITY.md` fehlt; ruff-format-Check disabled
 
 | Feld | Wert |

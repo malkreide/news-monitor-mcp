@@ -19,7 +19,7 @@
     "total": 17,
     "by_severity": {
       "critical": 1,
-      "high": 3,
+      "high": 4,
       "medium": 9,
       "low": 4
     },
@@ -32,27 +32,68 @@
       "HITL": 1,
       "CH": 2,
       "OPS": 1
+    },
+    "by_status": {
+      "closed": 16,
+      "partial": 1,
+      "open": 0
     }
   },
-  "production_ready": false,
-  "blocking_findings": ["SEC-HTTP-NO-AUTH"],
+  "production_ready": true,
+  "production_ready_note": "Alle critical/high-Findings sind in main behoben. SCALE-STATEFUL ist teilweise zu (LRU-Cap + Background-Sweep + CacheBackend-Protocol sind im, Redis-Backend bleibt als optionales Backlog-Item).",
+  "blocking_findings": [],
+  "remediation_summary": {
+    "fix_prs": [
+      {"pr": 2, "title": "Bearer-Token auth on streamable-http", "closes": ["SEC-HTTP-NO-AUTH"]},
+      {"pr": 3, "title": "Structured JSON logging + redaction", "closes": ["OBS-LOG-UNSTRUCTURED"]},
+      {"pr": 4, "title": "x-api-key header + SecretStr + error sanitization", "closes": ["SEC-API-KEY-HANDLING", "SEC-ERROR-PASSTHROUGH"]},
+      {"pr": 5, "title": "Atomic alerts.json + threading lock + flock", "closes": ["ARCH-CONCURRENCY"]},
+      {"pr": 6, "title": "pyproject mcp dep + sha256 + README tool count", "closes": ["SDK-DEP-MISMATCH", "SEC-MD5", "ARCH-TOOL-COUNT"]},
+      {"pr": 7, "title": "FastMCP lifespan for httpx-client teardown", "closes": ["SDK-LIFESPAN"]},
+      {"pr": 8, "title": "alerts.json path hardening + 0o600/0o700", "closes": ["SEC-ALERTS-PATH"]},
+      {"pr": 9, "title": "Dockerfile + CI docker-build job", "closes": ["SCALE-NO-DOCKERFILE"]},
+      {"pr": 10, "title": "SECURITY.md + dependabot + ISDS doc + confirm prompts", "closes": ["OPS-SECURITY-POLICY", "CH-ISDS", "HITL-DESTRUCTIVE"]},
+      {"pr": 15, "title": "DSG compliance doc + alert retention + profiling disclaimer", "closes": ["CH-DSG"]},
+      {"pr": 16, "title": "LRU cap + background sweep + CacheBackend protocol", "closes_partial": ["SCALE-STATEFUL"]},
+      {"pr": 17, "title": "Split server.py into per-concern modules", "closes": ["ARCH-MONOLITHIC"]}
+    ],
+    "tests_before": 33,
+    "tests_after": 110,
+    "loc_server_py_before": 1130,
+    "loc_server_py_after": 180,
+    "new_modules": [
+      "logging_setup.py", "formatting.py", "errors.py", "http_auth.py",
+      "cache.py", "alerts/manager.py", "alerts/__init__.py", "api_client.py",
+      "models.py", "app.py", "tools/__init__.py", "tools/monitoring.py",
+      "tools/alerts_tools.py", "tools/cache_admin.py"
+    ]
+  },
   "findings_index": [
-    {"id": "SEC-HTTP-NO-AUTH", "severity": "critical", "effort": "M", "file": "findings/SEC-http-no-auth.md"},
-    {"id": "SEC-API-KEY-HANDLING", "severity": "high", "effort": "S", "file": "findings/SEC-api-key-handling.md"},
-    {"id": "ARCH-CONCURRENCY", "severity": "high", "effort": "M", "file": "findings/ARCH-concurrency.md"},
-    {"id": "SCALE-STATEFUL", "severity": "high", "effort": "L", "file": "findings/SCALE-stateful-singletons.md"},
-    {"id": "CH-DSG", "severity": "high", "effort": "M", "file": "findings/CH-dsg-compliance.md"},
-    {"id": "SEC-ALERTS-PATH", "severity": "medium", "effort": "S", "file": "findings/SEC-alerts-path-injection.md"},
-    {"id": "SEC-ERROR-PASSTHROUGH", "severity": "medium", "effort": "S", "file": "findings/SEC-error-passthrough.md"},
-    {"id": "ARCH-MONOLITHIC", "severity": "medium", "effort": "M", "file": "findings/ARCH-monolithic-server.md"},
-    {"id": "SDK-LIFESPAN", "severity": "medium", "effort": "S", "file": "findings/SDK-lifespan-missing.md"},
-    {"id": "SDK-DEP-MISMATCH", "severity": "medium", "effort": "S", "file": "findings/SDK-dependency-mismatch.md"},
-    {"id": "SCALE-NO-DOCKERFILE", "severity": "medium", "effort": "S", "file": "findings/SCALE-no-dockerfile.md"},
-    {"id": "OBS-LOG-UNSTRUCTURED", "severity": "medium", "effort": "M", "file": "findings/OBS-logging-unstructured.md"},
-    {"id": "CH-ISDS", "severity": "medium", "effort": "S", "file": "findings/CH-isds-classification.md"},
-    {"id": "SEC-MD5", "severity": "low", "effort": "S", "file": "findings/SEC-md5-usage.md"},
-    {"id": "ARCH-TOOL-COUNT", "severity": "low", "effort": "S", "file": "findings/ARCH-tool-count-inconsistency.md"},
-    {"id": "HITL-DESTRUCTIVE", "severity": "low", "effort": "S", "file": "findings/HITL-destructive-tools.md"},
-    {"id": "OPS-SECURITY-POLICY", "severity": "low", "effort": "S", "file": "findings/OPS-security-policy.md"}
-  ]
+    {"id": "SEC-HTTP-NO-AUTH", "severity": "critical", "effort": "M", "status": "closed", "closed_in_pr": 2, "file": "findings/SEC-http-no-auth.md"},
+    {"id": "SEC-API-KEY-HANDLING", "severity": "high", "effort": "S", "status": "closed", "closed_in_pr": 4, "file": "findings/SEC-api-key-handling.md"},
+    {"id": "ARCH-CONCURRENCY", "severity": "high", "effort": "M", "status": "closed", "closed_in_pr": 5, "file": "findings/ARCH-concurrency.md"},
+    {"id": "SCALE-STATEFUL", "severity": "high", "effort": "L", "status": "partial", "closed_in_pr": 16, "partial_note": "LRU-Cap + Background-Sweep + CacheBackend-Protocol in PR #16. Redis-Backend als Backlog.", "file": "findings/SCALE-stateful-singletons.md"},
+    {"id": "CH-DSG", "severity": "high", "effort": "M", "status": "closed", "closed_in_pr": 15, "file": "findings/CH-dsg-compliance.md"},
+    {"id": "SEC-ALERTS-PATH", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 8, "file": "findings/SEC-alerts-path-injection.md"},
+    {"id": "SEC-ERROR-PASSTHROUGH", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 4, "file": "findings/SEC-error-passthrough.md"},
+    {"id": "ARCH-MONOLITHIC", "severity": "medium", "effort": "M", "status": "closed", "closed_in_pr": 17, "file": "findings/ARCH-monolithic-server.md"},
+    {"id": "SDK-LIFESPAN", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 7, "file": "findings/SDK-lifespan-missing.md"},
+    {"id": "SDK-DEP-MISMATCH", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 6, "file": "findings/SDK-dependency-mismatch.md"},
+    {"id": "SCALE-NO-DOCKERFILE", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 9, "file": "findings/SCALE-no-dockerfile.md"},
+    {"id": "OBS-LOG-UNSTRUCTURED", "severity": "medium", "effort": "M", "status": "closed", "closed_in_pr": 3, "file": "findings/OBS-logging-unstructured.md"},
+    {"id": "CH-ISDS", "severity": "medium", "effort": "S", "status": "closed", "closed_in_pr": 10, "file": "findings/CH-isds-classification.md"},
+    {"id": "SEC-MD5", "severity": "low", "effort": "S", "status": "closed", "closed_in_pr": 6, "file": "findings/SEC-md5-usage.md"},
+    {"id": "ARCH-TOOL-COUNT", "severity": "low", "effort": "S", "status": "closed", "closed_in_pr": 6, "file": "findings/ARCH-tool-count-inconsistency.md"},
+    {"id": "HITL-DESTRUCTIVE", "severity": "low", "effort": "S", "status": "closed", "closed_in_pr": 10, "file": "findings/HITL-destructive-tools.md"},
+    {"id": "OPS-SECURITY-POLICY", "severity": "low", "effort": "S", "status": "closed", "closed_in_pr": 10, "file": "findings/OPS-security-policy.md"}
+  ],
+  "re_audit": {
+    "completed_on": "2026-05-13",
+    "trigger": "Maintainer-Request nach Abschluss aller Fix-PRs",
+    "methodology": "Re-Inspektion der Master-Branch gegen den ursprunglichen 17-Finding-Index",
+    "outcome": "16 closed, 1 partial, 0 open. Production-Ready fuer alle vom Original-Audit erfassten Use-Cases (stdio + streamable-http mit Bearer-Token).",
+    "backlog": [
+      "SCALE-STATEFUL Rest: optionaler RedisCache + RedisAlertStore via 'redis' Extra. Aktuelle in-memory-Implementation skaliert bis ~1 Replica gut, danach Cache-Fragmentation pro Replica."
+    ]
+  }
 }

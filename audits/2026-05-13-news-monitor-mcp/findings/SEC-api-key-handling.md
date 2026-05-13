@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #4.
+
 # Finding: SEC-API-KEY-HANDLING — API-Key als Klartext-Env und URL-Query-Parameter
 
 | Feld | Wert |

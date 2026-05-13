@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #9.
+
 # Finding: SCALE-NO-DOCKERFILE — Container-Deployment dokumentiert, aber kein Dockerfile
 
 | Feld | Wert |

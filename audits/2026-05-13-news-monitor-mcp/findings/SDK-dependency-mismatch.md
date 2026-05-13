@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #6.
+
 # Finding: SDK-DEP-MISMATCH — `fastmcp` deklariert, aber `mcp.server.fastmcp` importiert
 
 | Feld | Wert |

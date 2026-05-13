@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #8.
+
 # Finding: SEC-ALERTS-PATH — Path-Injection-Vektor über `NEWS_MONITOR_ALERTS_FILE`
 
 | Feld | Wert |

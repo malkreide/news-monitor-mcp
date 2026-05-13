@@ -1,3 +1,5 @@
+> 🟡 **Re-Audit Status:** `partial` — Hauptpfad in PR #16 gemerged. Siehe summary.json fuer Backlog-Items.
+
 # Finding: SCALE-STATEFUL — In-Memory-State verhindert horizontale Skalierung
 
 | Feld | Wert |

@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #15.
+
 # Finding: CH-DSG — DSG/EDÖB-Kontext im Schulamt-Use-Case nicht adressiert
 
 | Feld | Wert |

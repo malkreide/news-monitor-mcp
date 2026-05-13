@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #7.
+
 # Finding: SDK-LIFESPAN — Keine FastMCP-Lifespan; httpx-Client wird nie geschlossen
 
 | Feld | Wert |

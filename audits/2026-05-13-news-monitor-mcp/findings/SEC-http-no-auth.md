@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #2.
+
 # Finding: SEC-HTTP-NO-AUTH — Streamable-HTTP-Transport ohne Authentifizierung auf 0.0.0.0
 
 | Feld | Wert |

@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #10.
+
 # Finding: HITL-DESTRUCTIVE — `news_alert_delete` / `news_cache_clear` ohne Confirmation-Pfad
 
 | Feld | Wert |
