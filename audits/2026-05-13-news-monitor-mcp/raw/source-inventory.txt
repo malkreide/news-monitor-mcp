@@ -1,0 +1,58 @@
+# Raw — Source Inventory
+
+Generated: 2026-05-13
+Branch: claude/audit-mcp-skill-a04O4
+
+## Python source
+
+src/news_monitor_mcp/__init__.py        — 3 lines (only __version__ = "0.2.0")
+src/news_monitor_mcp/server.py          — 1130 lines (all 15 tools, models, cache, alerts, CLI)
+tests/__init__.py                       — empty
+tests/test_server.py                    — 503 lines (~33 tests, unit + live)
+
+## Tool decorators
+
+$ grep -c "@mcp.tool" src/news_monitor_mcp/server.py
+15
+
+$ grep -n "@mcp.tool" src/news_monitor_mcp/server.py | awk '{print $1}'
+465:  # news_search
+514:  # news_top_headlines
+561:  # news_sentiment_monitor
+637:  # news_media_briefing
+690:  # news_retrieve_article
+727:  # news_search_sources
+763:  # news_front_pages
+802:  # news_trend_radar
+844:  # news_geo_search
+890:  # news_alert_create
+934:  # news_alert_list
+964:  # news_alert_check
+1042: # news_alert_delete
+1065: # news_cache_stats
+1092: # news_cache_clear
+
+## Dependencies (pyproject.toml)
+
+fastmcp >= 2.0.0     ← deklariert, aber nicht direkt importiert (Finding SDK-DEP-MISMATCH)
+httpx   >= 0.27.0
+pydantic>= 2.0.0
+
+Dev:
+pytest, pytest-asyncio, respx, ruff
+
+## CI workflows
+
+.github/workflows/ci.yml      — ruff + py_compile + pytest, Python 3.11/3.12/3.13
+.github/workflows/publish.yml — Tag-driven PyPI publish via OIDC Trusted Publisher
+
+## Files NOT present (audit-relevant absences)
+
+- Dockerfile           (Finding SCALE-NO-DOCKERFILE)
+- .dockerignore
+- SECURITY.md          (Finding OPS-SECURITY-POLICY)
+- .github/dependabot.yml
+- docs/                (directory does not exist)
+- PRIVACY-DSG.md       (Finding CH-DSG)
+- docs/isds-klassifikation.md (Finding CH-ISDS)
+- CODEOWNERS

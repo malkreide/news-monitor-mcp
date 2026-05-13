@@ -1,0 +1,58 @@
+{
+  "audit_id": "2026-05-13-news-monitor-mcp",
+  "audit_date": "2026-05-13",
+  "skill_version": "mcp-audit-skill@main",
+  "server": {
+    "name": "news-monitor-mcp",
+    "version": "0.2.0",
+    "repo": "https://github.com/malkreide/news-monitor-mcp",
+    "branch_audited": "claude/audit-mcp-skill-a04O4"
+  },
+  "checks": {
+    "total_catalog": 68,
+    "applicable": 62,
+    "executed": 62,
+    "not_applicable": 6,
+    "automated_subset_note": "Checks im code_review-/runtime_test-Modus wurden via manueller Source-Inspektion abgedeckt; keine Live-Tests gegen ein gehostetes Deployment durchgefuehrt."
+  },
+  "findings": {
+    "total": 17,
+    "by_severity": {
+      "critical": 1,
+      "high": 3,
+      "medium": 9,
+      "low": 4
+    },
+    "by_category": {
+      "SEC": 5,
+      "ARCH": 3,
+      "SDK": 2,
+      "SCALE": 2,
+      "OBS": 1,
+      "HITL": 1,
+      "CH": 2,
+      "OPS": 1
+    }
+  },
+  "production_ready": false,
+  "blocking_findings": ["SEC-HTTP-NO-AUTH"],
+  "findings_index": [
+    {"id": "SEC-HTTP-NO-AUTH", "severity": "critical", "effort": "M", "file": "findings/SEC-http-no-auth.md"},
+    {"id": "SEC-API-KEY-HANDLING", "severity": "high", "effort": "S", "file": "findings/SEC-api-key-handling.md"},
+    {"id": "ARCH-CONCURRENCY", "severity": "high", "effort": "M", "file": "findings/ARCH-concurrency.md"},
+    {"id": "SCALE-STATEFUL", "severity": "high", "effort": "L", "file": "findings/SCALE-stateful-singletons.md"},
+    {"id": "CH-DSG", "severity": "high", "effort": "M", "file": "findings/CH-dsg-compliance.md"},
+    {"id": "SEC-ALERTS-PATH", "severity": "medium", "effort": "S", "file": "findings/SEC-alerts-path-injection.md"},
+    {"id": "SEC-ERROR-PASSTHROUGH", "severity": "medium", "effort": "S", "file": "findings/SEC-error-passthrough.md"},
+    {"id": "ARCH-MONOLITHIC", "severity": "medium", "effort": "M", "file": "findings/ARCH-monolithic-server.md"},
+    {"id": "SDK-LIFESPAN", "severity": "medium", "effort": "S", "file": "findings/SDK-lifespan-missing.md"},
+    {"id": "SDK-DEP-MISMATCH", "severity": "medium", "effort": "S", "file": "findings/SDK-dependency-mismatch.md"},
+    {"id": "SCALE-NO-DOCKERFILE", "severity": "medium", "effort": "S", "file": "findings/SCALE-no-dockerfile.md"},
+    {"id": "OBS-LOG-UNSTRUCTURED", "severity": "medium", "effort": "M", "file": "findings/OBS-logging-unstructured.md"},
+    {"id": "CH-ISDS", "severity": "medium", "effort": "S", "file": "findings/CH-isds-classification.md"},
+    {"id": "SEC-MD5", "severity": "low", "effort": "S", "file": "findings/SEC-md5-usage.md"},
+    {"id": "ARCH-TOOL-COUNT", "severity": "low", "effort": "S", "file": "findings/ARCH-tool-count-inconsistency.md"},
+    {"id": "HITL-DESTRUCTIVE", "severity": "low", "effort": "S", "file": "findings/HITL-destructive-tools.md"},
+    {"id": "OPS-SECURITY-POLICY", "severity": "low", "effort": "S", "file": "findings/OPS-security-policy.md"}
+  ]
+}
