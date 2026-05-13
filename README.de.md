@@ -115,6 +115,7 @@ Sofort in Claude Desktop ausprobieren:
 | `MCP_PORT` | `8000` | Port für HTTP-Transport |
 | `MCP_BEARER_TOKEN` | – | **Pflicht im `--http`-Mode.** Bearer-Token, den Clients per `Authorization: Bearer <token>` mitsenden müssen. Generieren mit `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `MCP_ALLOWED_ORIGINS` | – | Optionale CSV-Allowlist für den `Origin`-Header (Schutz gegen DNS-Rebinding). Beispiel: `https://claude.ai`. |
+| `LOG_LEVEL` | `INFO` | Log-Level: `DEBUG` / `INFO` / `WARNING` / `ERROR`. Logs werden als JSON nach stderr geschrieben; `api-key=`-Query-Parameter und `Authorization: Bearer`-Header werden automatisch maskiert. |
 
 ### Claude Desktop Konfiguration
 

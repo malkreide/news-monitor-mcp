@@ -20,12 +20,15 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import sys
 import time
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from enum import Enum
+from logging.config import dictConfig
 from typing import Any, Optional
 
 import httpx
@@ -35,7 +38,106 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+# ---------------------------------------------------------------------------
+# Structured Logging
+# ---------------------------------------------------------------------------
+
 logger = logging.getLogger("news-monitor-mcp")
+
+_request_id: ContextVar[str] = ContextVar("request_id", default="-")
+
+_redaction_patterns: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"(api[-_]key=)[^&\s\"']+", re.IGNORECASE), r"\1***"),
+    (re.compile(r"(authorization:\s*bearer\s+)\S+", re.IGNORECASE), r"\1***"),
+]
+
+
+def add_redaction_pattern(pattern: str, replacement: str = "***") -> None:
+    """Registriert ein zusaetzliches Mask-Pattern fuer die Logging-Pipeline."""
+    _redaction_patterns.append((re.compile(pattern), replacement))
+
+
+def _redact(text: str) -> str:
+    for pat, repl in _redaction_patterns:
+        text = pat.sub(repl, text)
+    return text
+
+
+class _RequestIdFilter(logging.Filter):
+    """Haengt jeden LogRecord mit der aktuellen request_id-ContextVar an."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = _request_id.get()
+        return True
+
+
+class _RedactionFilter(logging.Filter):
+    """Maskiert sensitive Substrings (api-key, bearer-token) im final formatierten Output."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = _redact(record.msg)
+        if record.args:
+            try:
+                record.args = tuple(_redact(a) if isinstance(a, str) else a
+                                    for a in (record.args if isinstance(record.args, tuple)
+                                              else (record.args,)))
+            except Exception:
+                pass
+        return True
+
+
+class _JsonFormatter(logging.Formatter):
+    """Minimaler JSON-Formatter ohne externe Dependencies."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "lvl": record.levelname,
+            "logger": record.name,
+            "rid": getattr(record, "request_id", "-"),
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def configure_logging(level: Optional[str] = None) -> None:
+    """Initialisiert strukturiertes JSON-Logging mit Request-ID und Mask-Filter.
+
+    Idempotent: mehrfache Aufrufe ueberschreiben das Setup ohne Handler-Leck.
+    `httpx`/`httpcore` werden defensiv auf WARNING gesetzt, damit Request-URLs
+    (inkl. api-key-Query) nicht im DEBUG-Log landen, selbst wenn der Mask-Filter
+    eine Edge-Case verpasst.
+    """
+    resolved = (level or os.environ.get("LOG_LEVEL", "INFO")).upper()
+    dictConfig({
+        "version": 1,
+        "disable_existing_loggers": False,
+        "filters": {
+            "request_id": {"()": _RequestIdFilter},
+            "redact": {"()": _RedactionFilter},
+        },
+        "formatters": {
+            "json": {"()": _JsonFormatter},
+        },
+        "handlers": {
+            "stderr": {
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stderr",
+                "formatter": "json",
+                "filters": ["request_id", "redact"],
+                "level": resolved,
+            },
+        },
+        "root": {"handlers": ["stderr"], "level": resolved},
+        "loggers": {
+            "httpx": {"level": "WARNING", "propagate": True},
+            "httpcore": {"level": "WARNING", "propagate": True},
+            "uvicorn.access": {"level": "WARNING", "propagate": True},
+        },
+    })
 
 BASE_URL = "https://api.worldnewsapi.com"
 DEFAULT_TIMEOUT = 30.0
@@ -1137,6 +1239,25 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Setzt eine Request-ID pro HTTP-Request und exponiert sie via x-request-id-Header."""
+
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        incoming = request.headers.get("x-request-id", "")
+        rid = incoming if incoming else uuid.uuid4().hex[:12]
+        token = _request_id.set(rid)
+        t0 = time.monotonic()
+        try:
+            response = await call_next(request)
+        finally:
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info("http_request method=%s path=%s dur_ms=%.1f",
+                        request.method, request.url.path, duration_ms)
+            _request_id.reset(token)
+        response.headers["x-request-id"] = rid
+        return response
+
+
 class OriginAllowlistMiddleware(BaseHTTPMiddleware):
     """Blockiert Requests mit unerwartetem Origin-Header (DNS-Rebinding-Schutz)."""
 
@@ -1158,11 +1279,17 @@ def _parse_allowed_origins(raw: Optional[str]) -> frozenset[str]:
 
 
 def build_http_app(token: str, allowed_origins: frozenset[str]) -> Any:
-    """Baut die Streamable-HTTP-App inkl. Auth- und Origin-Middleware."""
+    """Baut die Streamable-HTTP-App inkl. Auth-, Origin- und Request-ID-Middleware.
+
+    Reihenfolge im Stack (outermost first, weil Starlette LIFO mountet):
+      RequestIdMiddleware → OriginAllowlistMiddleware → BearerAuthMiddleware → App.
+    Die Request-ID ist damit auch bei abgewiesenen 401/403-Responses verfuegbar.
+    """
     app = mcp.streamable_http_app()
+    app.add_middleware(BearerAuthMiddleware, token=token)
     if allowed_origins:
         app.add_middleware(OriginAllowlistMiddleware, allowed_origins=allowed_origins)
-    app.add_middleware(BearerAuthMiddleware, token=token)
+    app.add_middleware(RequestIdMiddleware)
     return app
 
 
@@ -1180,6 +1307,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("MCP_PORT", "8000")),
                         help="HTTP-Port (Standard: 8000)")
     args = parser.parse_args()
+    configure_logging()
     if args.http:
         token = os.environ.get("MCP_BEARER_TOKEN")
         if not token:
@@ -1190,7 +1318,7 @@ def main() -> None:
         allowed = _parse_allowed_origins(os.environ.get("MCP_ALLOWED_ORIGINS"))
         app = build_http_app(token, allowed)
         import uvicorn
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        uvicorn.run(app, host=args.host, port=args.port, log_config=None)
     else:
         mcp.run()
 
