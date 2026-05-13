@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #3.
+
 # Finding: OBS-LOG-UNSTRUCTURED — Logger ohne Konfiguration, ohne Struktur, ohne Trace-IDs
 
 | Feld | Wert |

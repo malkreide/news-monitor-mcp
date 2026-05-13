@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #17.
+
 # Finding: ARCH-MONOLITHIC — Gesamter Server in einer 1130-Zeilen-Datei
 
 | Feld | Wert |

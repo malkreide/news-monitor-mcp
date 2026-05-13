@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #6.
+
 # Finding: ARCH-TOOL-COUNT — README/Code-Inkonsistenz bei Tool-Anzahl
 
 | Feld | Wert |

@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #4.
+
 # Finding: SEC-ERROR-PASSTHROUGH — Unsanitisierte Exception-Strings im Tool-Output
 
 | Feld | Wert |

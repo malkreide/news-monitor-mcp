@@ -1,3 +1,5 @@
+> ✅ **Re-Audit Status:** `closed` — gemerged via PR #5.
+
 # Finding: ARCH-CONCURRENCY — Globale Mutables ohne Locking; Alert-File-TOCTOU
 
 | Feld | Wert |
