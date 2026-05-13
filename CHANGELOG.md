@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`SECURITY.md`** mit Private-Vulnerability-Reporting-Anleitung, Response-SLAs, Scope und Hardening-Baseline. Behebt das `low`-Finding `OPS-SECURITY-POLICY` (Audit 2026-05-13).
+- **`.github/dependabot.yml`** für wöchentliche Updates von `pip`, `github-actions` und `docker` Dependencies (Montag 06:00 Europe/Zurich, max. 5/3/3 offene PRs).
+- **`docs/isds-klassifikation.md`** — Schutzbedarfsfeststellung (Vertraulichkeit/Integrität/Verfügbarkeit), Verarbeitungsorte-Diagramm, Drittlandtransfer-Hinweis (Art. 16 DSG), Profiling-Klausel (Art. 5 lit. f DSG), Retention-Tabelle. Behebt `CH-ISDS` (medium).
+- **`confirm: bool = False`** auf `news_alert_delete` und `news_cache_clear`. Erstaufruf ohne `confirm=true` liefert eine Bestätigungs-Aufforderung statt zu löschen. Behebt `HITL-DESTRUCTIVE` (low): verhindert versehentliches Löschen durch LLM-Loops oder fehlinterpretierte Anweisungen.
 - **`Dockerfile` + `.dockerignore` + CI-Docker-Build-Job.** Behebt das `medium`-Finding `SCALE-NO-DOCKERFILE` (Audit 2026-05-13). Multi-Stage-Build auf `python:3.12-slim`, läuft als non-root UID `10001`, default `--http` mit `MCP_HOST=0.0.0.0`, persistiert Alerts in `/data`. CI baut das Image und prüft per Smoke-Test, dass `news-monitor-mcp --help` durchläuft und der Container ohne `MCP_BEARER_TOKEN` mit Exit-Code 2 abbricht (Härtung aus PR #2 wird also auch im Container-Pfad verifiziert).
 
 ### Changed

@@ -749,10 +749,16 @@ class CheckAlertsInput(BaseModel):
 class DeleteAlertInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra="forbid")
     alert_id: str = Field(..., description="Alert-ID aus news_alert_list", min_length=10)
+    confirm: bool = Field(default=False,
+        description="Muss explizit True sein, um den Alert zu loeschen. Erstaufruf "
+                    "mit confirm=False liefert eine Bestaetigungs-Aufforderung.")
 
 class CacheClearInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra="forbid")
     tool_type: Optional[str] = Field(default=None, description="Cache-Typ leeren: search|headlines|sentiment|briefing|article|sources|front_pages|trend|geo. Leer = alles.")
+    confirm: bool = Field(default=False,
+        description="Muss explizit True sein, um den Cache zu leeren. Erstaufruf "
+                    "mit confirm=False liefert eine Bestaetigungs-Aufforderung.")
 
 
 # ---------------------------------------------------------------------------
@@ -1350,6 +1356,9 @@ async def news_alert_delete(params: DeleteAlertInput) -> str:
     if alert is None:
         return f"Alert {params.alert_id} nicht gefunden.\nnews_alert_list zum Anzeigen aller Alert-IDs."
     name = alert.get("name", "Unbekannt")
+    if not params.confirm:
+        return (f"Bestaetigung erforderlich: Alert **{name}** (`{params.alert_id}`) wird permanent geloescht. "
+                f"Erneut mit `confirm=true` aufrufen.")
     if _alert_manager.delete(params.alert_id):
         return f"Alert **{name}** (`{params.alert_id}`) geloescht.\nVerbleibende Alerts: {len(_alert_manager.list_all())}"
     return f"Fehler beim Loeschen von Alert {params.alert_id}."
@@ -1396,10 +1405,16 @@ async def news_cache_clear(params: CacheClearInput) -> str:
     Returns:
         str: Anzahl geloeschter Cache-Eintraege.
     """
+    if params.tool_type and params.tool_type not in CACHE_TTL:
+        valid = ", ".join(f"'{k}'" for k in CACHE_TTL)
+        return f"Unbekannter Tool-Typ '{params.tool_type}'. Erlaubt: {valid}"
+    if not params.confirm:
+        scope = f"Cache-Typ `{params.tool_type}`" if params.tool_type else "GESAMTE Cache"
+        current_size = (sum(1 for _, (_, t, _) in _cache._store.items() if t == params.tool_type)
+                        if params.tool_type else len(_cache._store))
+        return (f"Bestaetigung erforderlich: {scope} wird geleert ({current_size} Eintraege betroffen). "
+                f"Erneut mit `confirm=true` aufrufen.")
     if params.tool_type:
-        if params.tool_type not in CACHE_TTL:
-            valid = ", ".join(f"'{k}'" for k in CACHE_TTL)
-            return f"Unbekannter Tool-Typ '{params.tool_type}'. Erlaubt: {valid}"
         count = _cache.clear(params.tool_type)
         return f"Cache fuer `{params.tool_type}` geleert: {count} Eintraege entfernt."
     count = _cache.clear()

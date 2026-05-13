@@ -365,6 +365,14 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
+## Security & Compliance
+
+- Report vulnerabilities privately: see [SECURITY.md](SECURITY.md)
+- Swiss public-sector deployment: see [`docs/isds-klassifikation.md`](docs/isds-klassifikation.md) for the ISDS / Schutzbedarfsfeststellung
+- Audit history: [`audits/`](audits/)
+
+---
+
 ## License
 
 MIT License — see [LICENSE](LICENSE)
