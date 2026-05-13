@@ -50,6 +50,12 @@
 | 7 | `news_front_pages` | Digital newspaper front pages |
 | 8 | `news_trend_radar` | Category-based trend detection per country |
 | 9 | `news_geo_search` | Location-specific news search |
+| 10 | `news_alert_create` | Create a persistent alert (sentiment / volume / keyword) |
+| 11 | `news_alert_list` | List configured alerts with status |
+| 12 | `news_alert_check` | Evaluate alerts against current data |
+| 13 | `news_alert_delete` | Permanently remove an alert |
+| 14 | `news_cache_stats` | Cache hit-rate and entries by type |
+| 15 | `news_cache_clear` | Clear cache (entirely or per tool type) |
 
 ---
 

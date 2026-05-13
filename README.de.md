@@ -50,6 +50,12 @@
 | 7 | `news_front_pages` | Digitale Zeitungscovers |
 | 8 | `news_trend_radar` | Kategorie-basierte Trenderkennung pro Land |
 | 9 | `news_geo_search` | Standortspezifische Nachrichtensuche |
+| 10 | `news_alert_create` | Persistenten Alert erstellen (Sentiment / Volume / Keyword) |
+| 11 | `news_alert_list` | Konfigurierte Alerts mit Status auflisten |
+| 12 | `news_alert_check` | Alerts gegen aktuelle Daten prüfen |
+| 13 | `news_alert_delete` | Alert permanent löschen |
+| 14 | `news_cache_stats` | Cache-Trefferquote und Einträge nach Typ |
+| 15 | `news_cache_clear` | Cache leeren (komplett oder pro Tool-Typ) |
 
 ---
 

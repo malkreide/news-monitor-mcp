@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`mcp>=1.0.0`** statt `fastmcp>=2.0.0` als deklarierte Dependency. Behebt das `medium`-Finding `SDK-DEP-MISMATCH` (Audit 2026-05-13): der Code importiert ausschliesslich `mcp.server.fastmcp.FastMCP` aus dem offiziellen MCP-SDK; das standalone `fastmcp`-Paket wurde nie verwendet.
+- **`hashlib.sha256` statt `hashlib.md5`** für Cache-Keys. Behebt `SEC-MD5` (low): kein FIPS-Mode-Block mehr, kein Bandit-/ruff-S324-Noise.
+- **README + README.de Tool-Tabellen** listen alle 15 Tools (vorher nur 9). Behebt `ARCH-TOOL-COUNT` (low).
+
 ### Security
 - **API-Key wandert vom URL-Query in den `x-api-key`-HTTP-Header.** Behebt das `high`-Finding `SEC-API-KEY-HANDLING` (Audit 2026-05-13). Alle 10 Call-Sites gegen WorldNewsAPI senden den Key jetzt im Header (von WorldNewsAPI [offiziell unterstützt](https://worldnewsapi.com/docs/authentication/)); die URL enthält den Key nicht mehr und kann nicht mehr in Proxy-/Access-Logs landen.
 - **`WORLD_NEWS_API_KEY` wird in `pydantic.SecretStr` gewickelt.** `str()`/`repr()` liefern `***********`; der Klartext ist nur noch über `.get_secret_value()` an der API-Boundary zugreifbar.
