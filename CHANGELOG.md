@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **README + README.de Tool-Tabellen** listen alle 15 Tools (vorher nur 9). Behebt `ARCH-TOOL-COUNT` (low).
 
 ### Security
+- **`alerts.json` mit `0o600`, Verzeichnis mit `0o700`.** Behebt das `medium`-Finding `SEC-ALERTS-PATH` (Audit 2026-05-13). Tempfile-basierter atomic write erzeugt das File bereits mit Mode `0o600`; ein `_ensure_secure_perms()`-Helper migriert bestehende Files beim Start und nach jedem Save.
+- **Symlink-Schutz für den Alerts-Pfad.** `_resolve_alerts_path()` wirft `RuntimeError`, wenn das Parent-Verzeichnis ein Symlink ist (`realpath != absolute path`). Verhindert Path-Injection via attacker-kontrolliertem `NEWS_MONITOR_ALERTS_FILE` oder `NEWS_MONITOR_ALERTS_DIR`-Env in Multi-Tenant-Containern.
+- **Neues Env `NEWS_MONITOR_ALERTS_DIR`** (bevorzugt). `NEWS_MONITOR_ALERTS_FILE` bleibt als Back-Compat-Fallback erhalten — mit identischem Symlink-Check.
 - **API-Key wandert vom URL-Query in den `x-api-key`-HTTP-Header.** Behebt das `high`-Finding `SEC-API-KEY-HANDLING` (Audit 2026-05-13). Alle 10 Call-Sites gegen WorldNewsAPI senden den Key jetzt im Header (von WorldNewsAPI [offiziell unterstützt](https://worldnewsapi.com/docs/authentication/)); die URL enthält den Key nicht mehr und kann nicht mehr in Proxy-/Access-Logs landen.
 - **`WORLD_NEWS_API_KEY` wird in `pydantic.SecretStr` gewickelt.** `str()`/`repr()` liefern `***********`; der Klartext ist nur noch über `.get_secret_value()` an der API-Boundary zugreifbar.
 - **`_handle_api_error()` sanitisiert.** Der Fallback-Branch gibt nicht mehr `str(e)` an den MCP-Client zurück (das konnte interne URLs, Hostnames oder Stacktraces leaken). Stattdessen: Typ-Name + Verweis aufs Server-Log; volle Exception geht via `logger.exception(...)` durch die Redaction-Pipeline.
