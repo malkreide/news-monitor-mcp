@@ -27,7 +27,7 @@ import tempfile
 import threading
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta
 from enum import Enum
@@ -392,6 +392,29 @@ class AlertManager:
 _cache = NewsCache()
 _alert_manager = AlertManager()
 
+
+@asynccontextmanager
+async def server_lifespan(_server: Any):
+    """FastMCP-Lifespan: räumt prozessglobale Ressourcen beim Shutdown auf.
+
+    Konkret: schliesst den lazy erzeugten `_client` (httpx.AsyncClient), damit
+    offene TCP-Verbindungen zu WorldNewsAPI sauber abgebaut werden und keine
+    ResourceWarnings entstehen. Wird sowohl für stdio- als auch streamable-http
+    Transport aufgerufen.
+    """
+    global _client
+    try:
+        yield {}
+    finally:
+        if _client is not None:
+            try:
+                await _client.aclose()
+            except Exception:  # noqa: BLE001
+                logger.exception("httpx-Client konnte nicht sauber geschlossen werden")
+            finally:
+                _client = None
+
+
 mcp = FastMCP(
     "news_monitor_mcp",
     instructions=(
@@ -402,6 +425,7 @@ mcp = FastMCP(
         "API-Key: WORLD_NEWS_API_KEY. DACH: source-country=ch,de,at. "
         "Sentiment nur DE/EN. Alerts: news_alert_create dann news_alert_check."
     ),
+    lifespan=server_lifespan,
 )
 
 _client: Optional[httpx.AsyncClient] = None
