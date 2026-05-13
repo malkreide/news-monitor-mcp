@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **API-Key wandert vom URL-Query in den `x-api-key`-HTTP-Header.** Behebt das `high`-Finding `SEC-API-KEY-HANDLING` (Audit 2026-05-13). Alle 10 Call-Sites gegen WorldNewsAPI senden den Key jetzt im Header (von WorldNewsAPI [offiziell unterstützt](https://worldnewsapi.com/docs/authentication/)); die URL enthält den Key nicht mehr und kann nicht mehr in Proxy-/Access-Logs landen.
+- **`WORLD_NEWS_API_KEY` wird in `pydantic.SecretStr` gewickelt.** `str()`/`repr()` liefern `***********`; der Klartext ist nur noch über `.get_secret_value()` an der API-Boundary zugreifbar.
+- **`_handle_api_error()` sanitisiert.** Der Fallback-Branch gibt nicht mehr `str(e)` an den MCP-Client zurück (das konnte interne URLs, Hostnames oder Stacktraces leaken). Stattdessen: Typ-Name + Verweis aufs Server-Log; volle Exception geht via `logger.exception(...)` durch die Redaction-Pipeline.
+- **Zusätzliches Mask-Pattern** für `x-api-key`-Header-Dumps in Logs (defense in depth, falls sich der Header doch mal in einem Log-Record materialisiert).
 - **Streamable-HTTP-Transport erfordert jetzt einen Bearer-Token.** Pflicht-Env-Variable `MCP_BEARER_TOKEN` im `--http`-Mode; Requests ohne gültigen `Authorization: Bearer <token>`-Header werden mit HTTP 401 abgewiesen. Behebt das `critical`-Finding `SEC-HTTP-NO-AUTH` (Audit 2026-05-13).
 - **Optionale Origin-Allowlist** via `MCP_ALLOWED_ORIGINS` (CSV) schützt gegen DNS-Rebinding-Angriffe.
 - **Default-Host auf `127.0.0.1`** gewechselt (vorher `0.0.0.0`). Für Container-Deployments via `--host 0.0.0.0` oder `MCP_HOST=0.0.0.0` explizit setzen.
