@@ -111,7 +111,10 @@ Try it immediately in Claude Desktop:
 |---|---|---|
 | `WORLD_NEWS_API_KEY` | – | **Required.** API key from worldnewsapi.com |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable_http` |
+| `MCP_HOST` | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only inside a container. |
 | `MCP_PORT` | `8000` | Port for HTTP transport |
+| `MCP_BEARER_TOKEN` | – | **Required in `--http` mode.** Bearer token clients must present in `Authorization: Bearer <token>`. Generate via `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
+| `MCP_ALLOWED_ORIGINS` | – | Optional CSV allowlist for the `Origin` header (DNS-rebinding protection). Example: `https://claude.ai`. |
 
 ### Claude Desktop Configuration
 
@@ -144,15 +147,31 @@ After restarting Claude Desktop, all tools are available. Example queries:
 
 For use via **claude.ai in the browser** (e.g. on managed workstations without local software):
 
+**Authentication is mandatory.** The HTTP transport refuses any request without a valid `Authorization: Bearer <token>` header. Generate a token once and keep it secret:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
 **Render.com (recommended):**
 1. Push/fork the repository to GitHub
 2. On [render.com](https://render.com): New Web Service → connect GitHub repo
-3. Set `WORLD_NEWS_API_KEY` in the Render dashboard environment variables
-4. In claude.ai under Settings → MCP Servers, add: `https://your-app.onrender.com/mcp`
+3. Set the following environment variables in the Render dashboard:
+   - `WORLD_NEWS_API_KEY` — your WorldNewsAPI key
+   - `MCP_BEARER_TOKEN` — the token generated above
+   - `MCP_HOST=0.0.0.0` — bind on all interfaces inside the container
+   - `MCP_ALLOWED_ORIGINS=https://claude.ai` *(optional, recommended)*
+4. In claude.ai under Settings → MCP Servers, add the URL `https://your-app.onrender.com/mcp` and configure the Bearer token as the auth header.
 
 ```bash
-# Docker / local HTTP mode
-WORLD_NEWS_API_KEY=your-key MCP_TRANSPORT=streamable_http MCP_PORT=8000 python -m news_monitor_mcp.server
+# Docker / local HTTP mode (binds 127.0.0.1 by default)
+WORLD_NEWS_API_KEY=your-key \
+  MCP_BEARER_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))") \
+  news-monitor-mcp --http --port 8000
+
+# Verify auth is enforced
+curl -i http://127.0.0.1:8000/mcp                                  # → 401
+curl -i -H "Authorization: Bearer $MCP_BEARER_TOKEN" http://127.0.0.1:8000/mcp
 ```
 
 ---

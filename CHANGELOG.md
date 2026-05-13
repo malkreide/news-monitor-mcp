@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Streamable-HTTP-Transport erfordert jetzt einen Bearer-Token.** Pflicht-Env-Variable `MCP_BEARER_TOKEN` im `--http`-Mode; Requests ohne gültigen `Authorization: Bearer <token>`-Header werden mit HTTP 401 abgewiesen. Behebt das `critical`-Finding `SEC-HTTP-NO-AUTH` (Audit 2026-05-13).
+- **Optionale Origin-Allowlist** via `MCP_ALLOWED_ORIGINS` (CSV) schützt gegen DNS-Rebinding-Angriffe.
+- **Default-Host auf `127.0.0.1`** gewechselt (vorher `0.0.0.0`). Für Container-Deployments via `--host 0.0.0.0` oder `MCP_HOST=0.0.0.0` explizit setzen.
+
+### Changed
+- `main()` mountet die FastMCP-App jetzt unter Starlette-Middleware und startet via `uvicorn`. `starlette` und `uvicorn` sind explizite Dependencies geworden.
+
 ## [0.2.0] - 2026-03-22
 
 ### Added

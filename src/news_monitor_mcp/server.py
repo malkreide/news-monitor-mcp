@@ -20,6 +20,8 @@ import hashlib
 import json
 import logging
 import os
+import secrets
+import sys
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -29,6 +31,9 @@ from typing import Any, Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 logger = logging.getLogger("news-monitor-mcp")
 
@@ -1110,6 +1115,58 @@ async def news_cache_clear(params: CacheClearInput) -> str:
 
 
 # ---------------------------------------------------------------------------
+# HTTP-Auth (Streamable-HTTP-Mode)
+# ---------------------------------------------------------------------------
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Erzwingt Bearer-Token-Authentifizierung auf allen Requests."""
+
+    def __init__(self, app: Any, token: str) -> None:
+        super().__init__(app)
+        self._token = token
+
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        auth = request.headers.get("authorization", "")
+        scheme, _, presented = auth.partition(" ")
+        if scheme.lower() != "bearer" or not presented:
+            return JSONResponse({"error": "unauthorized"}, status_code=401,
+                                headers={"www-authenticate": "Bearer"})
+        if not secrets.compare_digest(presented, self._token):
+            return JSONResponse({"error": "unauthorized"}, status_code=401,
+                                headers={"www-authenticate": "Bearer"})
+        return await call_next(request)
+
+
+class OriginAllowlistMiddleware(BaseHTTPMiddleware):
+    """Blockiert Requests mit unerwartetem Origin-Header (DNS-Rebinding-Schutz)."""
+
+    def __init__(self, app: Any, allowed_origins: frozenset[str]) -> None:
+        super().__init__(app)
+        self._allowed = allowed_origins
+
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in self._allowed:
+            return JSONResponse({"error": "origin not allowed"}, status_code=403)
+        return await call_next(request)
+
+
+def _parse_allowed_origins(raw: Optional[str]) -> frozenset[str]:
+    if not raw:
+        return frozenset()
+    return frozenset(o.strip() for o in raw.split(",") if o.strip())
+
+
+def build_http_app(token: str, allowed_origins: frozenset[str]) -> Any:
+    """Baut die Streamable-HTTP-App inkl. Auth- und Origin-Middleware."""
+    app = mcp.streamable_http_app()
+    if allowed_origins:
+        app.add_middleware(OriginAllowlistMiddleware, allowed_origins=allowed_origins)
+    app.add_middleware(BearerAuthMiddleware, token=token)
+    return app
+
+
+# ---------------------------------------------------------------------------
 # Entry Point
 # ---------------------------------------------------------------------------
 
@@ -1118,10 +1175,22 @@ def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description="News Monitor MCP Server v0.2.0")
     parser.add_argument("--http", action="store_true", help="HTTP-Server statt stdio")
-    parser.add_argument("--port", type=int, default=8000, help="HTTP-Port (Standard: 8000)")
+    parser.add_argument("--host", default=os.environ.get("MCP_HOST", "127.0.0.1"),
+                        help="HTTP-Host (Standard: 127.0.0.1; fuer Container: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("MCP_PORT", "8000")),
+                        help="HTTP-Port (Standard: 8000)")
     args = parser.parse_args()
     if args.http:
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=args.port)
+        token = os.environ.get("MCP_BEARER_TOKEN")
+        if not token:
+            print("ERROR: MCP_BEARER_TOKEN muss im HTTP-Mode gesetzt sein. "
+                  "Erzeuge z.B. mit: python -c \"import secrets; print(secrets.token_urlsafe(32))\"",
+                  file=sys.stderr)
+            sys.exit(2)
+        allowed = _parse_allowed_origins(os.environ.get("MCP_ALLOWED_ORIGINS"))
+        app = build_http_app(token, allowed)
+        import uvicorn
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run()
 
