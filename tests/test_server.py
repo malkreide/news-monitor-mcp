@@ -599,4 +599,166 @@ def test_build_http_app_layers_middlewares():
     middleware_classes = [m.cls.__name__ for m in app.user_middleware]
     assert "BearerAuthMiddleware" in middleware_classes
     assert "OriginAllowlistMiddleware" in middleware_classes
+    assert "RequestIdMiddleware" in middleware_classes
+
+
+# ---------------------------------------------------------------------------
+# Structured-Logging-Tests
+# ---------------------------------------------------------------------------
+
+import io
+import json as _json
+import logging as _logging
+
+
+def _capture_logs(level: str = "INFO") -> tuple[_logging.Logger, io.StringIO]:
+    """Konfiguriert Logging gegen einen In-Memory-Buffer und liefert (logger, buffer)."""
+    from news_monitor_mcp.server import _JsonFormatter, _RedactionFilter, _RequestIdFilter
+
+    buf = io.StringIO()
+    handler = _logging.StreamHandler(buf)
+    handler.setFormatter(_JsonFormatter())
+    handler.addFilter(_RequestIdFilter())
+    handler.addFilter(_RedactionFilter())
+    handler.setLevel(level)
+
+    root = _logging.getLogger()
+    saved = (root.level, list(root.handlers))
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    root.addHandler(handler)
+    root.setLevel(level)
+
+    def restore():
+        root.removeHandler(handler)
+        root.setLevel(saved[0])
+        for h in saved[1]:
+            root.addHandler(h)
+    return root, buf, restore  # type: ignore[return-value]
+
+
+def test_json_formatter_emits_valid_json_with_required_fields():
+    root, buf, restore = _capture_logs()
+    try:
+        from news_monitor_mcp.server import logger as srv_logger
+        srv_logger.info("hello")
+    finally:
+        restore()
+    line = buf.getvalue().strip().splitlines()[-1]
+    payload = _json.loads(line)
+    assert payload["lvl"] == "INFO"
+    assert payload["msg"] == "hello"
+    assert payload["logger"] == "news-monitor-mcp"
+    assert payload["rid"] == "-"
+    assert "ts" in payload
+
+
+def test_request_id_contextvar_appears_in_log():
+    from news_monitor_mcp.server import _request_id, logger as srv_logger
+    root, buf, restore = _capture_logs()
+    try:
+        tok = _request_id.set("abc123def456")
+        try:
+            srv_logger.info("with rid")
+        finally:
+            _request_id.reset(tok)
+    finally:
+        restore()
+    payload = _json.loads(buf.getvalue().strip().splitlines()[-1])
+    assert payload["rid"] == "abc123def456"
+
+
+def test_redaction_masks_api_key_in_url():
+    from news_monitor_mcp.server import logger as srv_logger
+    root, buf, restore = _capture_logs()
+    try:
+        srv_logger.info("calling https://api.worldnewsapi.com/search-news?api-key=SECRETXYZ&text=foo")
+    finally:
+        restore()
+    msg = _json.loads(buf.getvalue().strip().splitlines()[-1])["msg"]
+    assert "SECRETXYZ" not in msg
+    assert "api-key=***" in msg
+
+
+def test_redaction_masks_authorization_bearer():
+    from news_monitor_mcp.server import logger as srv_logger
+    root, buf, restore = _capture_logs()
+    try:
+        srv_logger.info("header authorization: Bearer SUPERSECRETTOKEN")
+    finally:
+        restore()
+    msg = _json.loads(buf.getvalue().strip().splitlines()[-1])["msg"]
+    assert "SUPERSECRETTOKEN" not in msg
+    assert "***" in msg
+
+
+def test_add_redaction_pattern_extends_pipeline():
+    from news_monitor_mcp.server import add_redaction_pattern, _redaction_patterns, logger as srv_logger
+    saved = list(_redaction_patterns)
+    try:
+        add_redaction_pattern(r"PIN-\d{4}", "PIN-****")
+        root, buf, restore = _capture_logs()
+        try:
+            srv_logger.info("user PIN-1234 entered")
+        finally:
+            restore()
+        msg = _json.loads(buf.getvalue().strip().splitlines()[-1])["msg"]
+        assert "PIN-1234" not in msg
+        assert "PIN-****" in msg
+    finally:
+        _redaction_patterns[:] = saved
+
+
+def test_configure_logging_is_idempotent():
+    from news_monitor_mcp.server import configure_logging
+    configure_logging("INFO")
+    handlers_first = list(_logging.getLogger().handlers)
+    configure_logging("DEBUG")
+    handlers_second = list(_logging.getLogger().handlers)
+    assert len(handlers_first) == len(handlers_second) == 1
+    assert _logging.getLogger().level == _logging.DEBUG
+
+
+def test_configure_logging_silences_httpx_below_warning():
+    from news_monitor_mcp.server import configure_logging
+    configure_logging("DEBUG")
+    assert _logging.getLogger("httpx").getEffectiveLevel() >= _logging.WARNING
+    assert _logging.getLogger("httpcore").getEffectiveLevel() >= _logging.WARNING
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_sets_header_and_contextvar():
+    from news_monitor_mcp.server import RequestIdMiddleware, _request_id
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Route
+
+    seen = {}
+
+    async def handler(_request):
+        seen["rid_during"] = _request_id.get()
+        return PlainTextResponse("ok")
+
+    app = Starlette(routes=[Route("/mcp", handler)])
+    app.add_middleware(RequestIdMiddleware)
+    client = TestClient(app)
+    r = client.get("/mcp")
+    assert r.status_code == 200
+    assert "x-request-id" in r.headers
+    assert r.headers["x-request-id"] == seen["rid_during"]
+    assert len(r.headers["x-request-id"]) == 12
+
+
+@pytest.mark.asyncio
+async def test_request_id_middleware_preserves_incoming_id():
+    from news_monitor_mcp.server import RequestIdMiddleware
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Route
+
+    app = Starlette(routes=[Route("/mcp", lambda r: PlainTextResponse("ok"))])
+    app.add_middleware(RequestIdMiddleware)
+    client = TestClient(app)
+    r = client.get("/mcp", headers={"x-request-id": "client-supplied-id"})
+    assert r.headers["x-request-id"] == "client-supplied-id"
 

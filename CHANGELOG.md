@@ -15,9 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Streamable-HTTP-Transport erfordert jetzt einen Bearer-Token.** Pflicht-Env-Variable `MCP_BEARER_TOKEN` im `--http`-Mode; Requests ohne gültigen `Authorization: Bearer <token>`-Header werden mit HTTP 401 abgewiesen. Behebt das `critical`-Finding `SEC-HTTP-NO-AUTH` (Audit 2026-05-13).
 - **Optionale Origin-Allowlist** via `MCP_ALLOWED_ORIGINS` (CSV) schützt gegen DNS-Rebinding-Angriffe.
 - **Default-Host auf `127.0.0.1`** gewechselt (vorher `0.0.0.0`). Für Container-Deployments via `--host 0.0.0.0` oder `MCP_HOST=0.0.0.0` explizit setzen.
+- **Log-Maskierung:** `api-key=...`-Query-Parameter und `Authorization: Bearer ...`-Header werden in allen Log-Records automatisch durch `***` ersetzt. Reduziert die Leak-Oberfläche aus `SEC-API-KEY-HANDLING` schon vor dem dedizierten Fix.
+
+### Added
+- **Strukturiertes JSON-Logging** mit Request-ID-Propagation (Finding `OBS-LOG-UNSTRUCTURED`, Audit 2026-05-13):
+  - `configure_logging()` setzt JSON-Formatter, `LOG_LEVEL`-Env-Variable, `_RequestIdFilter` und `_RedactionFilter` idempotent auf.
+  - `RequestIdMiddleware` setzt pro HTTP-Request eine 12-Hex-`request_id` (oder übernimmt eingehenden `x-request-id`-Header), schreibt sie zurück in den Response-Header und loggt Methode/Pfad/Dauer.
+  - Öffentliche API `add_redaction_pattern(pattern, replacement)` zur Erweiterung der Mask-Pipeline.
+  - `httpx` und `httpcore` werden defensiv auf `WARNING` gesetzt, um Request-URL-Leaks bei `LOG_LEVEL=DEBUG` zu vermeiden.
 
 ### Changed
 - `main()` mountet die FastMCP-App jetzt unter Starlette-Middleware und startet via `uvicorn`. `starlette` und `uvicorn` sind explizite Dependencies geworden.
+- `main()` ruft beim Start `configure_logging()` auf; uvicorn verwendet kein eigenes Log-Config mehr (`log_config=None`).
 
 ## [0.2.0] - 2026-03-22
 
