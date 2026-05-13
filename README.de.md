@@ -122,6 +122,8 @@ Sofort in Claude Desktop ausprobieren:
 | `MCP_BEARER_TOKEN` | – | **Pflicht im `--http`-Mode.** Bearer-Token, den Clients per `Authorization: Bearer <token>` mitsenden müssen. Generieren mit `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `MCP_ALLOWED_ORIGINS` | – | Optionale CSV-Allowlist für den `Origin`-Header (Schutz gegen DNS-Rebinding). Beispiel: `https://claude.ai`. |
 | `LOG_LEVEL` | `INFO` | Log-Level: `DEBUG` / `INFO` / `WARNING` / `ERROR`. Logs werden als JSON nach stderr geschrieben; `api-key=`-Query-Parameter und `Authorization: Bearer`-Header werden automatisch maskiert. |
+| `NEWS_MONITOR_ALERTS_DIR` | `~/.news-monitor-mcp` | Verzeichnis für `alerts.json`. Das Parent-Verzeichnis darf kein Symlink sein (wird beim Start als Schutz gegen Path-Injection abgewiesen). File wird mit Mode `0o600`, Dir mit `0o700` angelegt. |
+| `NEWS_MONITOR_ALERTS_FILE` | – | *(Back-Compat)* expliziter Pfad zur Alert-Datei. Gleiche Symlink-Prüfung. Bevorzugt `NEWS_MONITOR_ALERTS_DIR`. |
 
 ### Claude Desktop Konfiguration
 

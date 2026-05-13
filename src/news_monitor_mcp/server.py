@@ -163,8 +163,69 @@ CACHE_TTL: dict[str, int] = {
     "geo": 1800,
 }
 
-DEFAULT_ALERTS_FILE = os.path.expanduser("~/.news-monitor-mcp/alerts.json")
-ALERTS_FILE = os.environ.get("NEWS_MONITOR_ALERTS_FILE", DEFAULT_ALERTS_FILE)
+ALERTS_DIR_DEFAULT = os.path.expanduser("~/.news-monitor-mcp")
+
+
+def _resolve_alerts_path() -> str:
+    """Resolve und härte den Pfad zu alerts.json.
+
+    Env-Präzedenz:
+      NEWS_MONITOR_ALERTS_FILE  – expliziter Dateipfad (Back-Compat).
+      NEWS_MONITOR_ALERTS_DIR   – Verzeichnis; File ist `<dir>/alerts.json`.
+      sonst                     – `~/.news-monitor-mcp/alerts.json`.
+
+    Security-Checks:
+      * Pfad muss nach `os.path.normpath` lexikalisch unverändert sein (keine
+        `..`-Segmente, die nach Normalisierung übrig bleiben).
+      * Wenn das Parent-Verzeichnis existiert, darf es **kein Symlink** sein —
+        `realpath != absolute path` triggert eine Ablehnung, da ein
+        Symlink-Swap das File in einen sensiblen Pfad umleiten könnte.
+    """
+    raw_file = os.environ.get("NEWS_MONITOR_ALERTS_FILE")
+    if raw_file:
+        candidate = os.path.expanduser(raw_file)
+    else:
+        base = os.environ.get("NEWS_MONITOR_ALERTS_DIR")
+        base_dir = os.path.expanduser(base) if base else ALERTS_DIR_DEFAULT
+        candidate = os.path.join(base_dir, "alerts.json")
+
+    abspath = os.path.abspath(candidate)
+    if abspath != os.path.normpath(abspath):
+        raise RuntimeError(
+            f"alerts path contains '..' after normalization: {candidate}"
+        )
+
+    parent = os.path.dirname(abspath) or "."
+    if os.path.lexists(parent):
+        parent_real = os.path.realpath(parent)
+        if parent_real != parent:
+            raise RuntimeError(
+                f"alerts parent dir is a symlink: {parent} -> {parent_real}; "
+                "set NEWS_MONITOR_ALERTS_DIR to a non-symlinked directory"
+            )
+    return abspath
+
+
+def _ensure_secure_perms(path: str) -> None:
+    """Best-effort: 0o700 auf das Alerts-Verzeichnis, 0o600 auf alerts.json.
+
+    Fehler werden geschluckt — auf Windows oder geteilten Filesystems schlägt
+    chmod gerne fehl. Wichtig ist, dass das Hauptverhalten nicht blockiert wird.
+    """
+    parent = os.path.dirname(path)
+    if parent and os.path.isdir(parent):
+        try:
+            os.chmod(parent, 0o700)
+        except OSError:
+            pass
+    if os.path.isfile(path):
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
+
+ALERTS_FILE = _resolve_alerts_path()
 
 
 class NewsCache:
@@ -309,6 +370,7 @@ class AlertManager:
         self._alerts: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._load()
+        _ensure_secure_perms(self._file)
 
     def _load(self) -> None:
         if os.path.exists(self._file):
@@ -322,6 +384,7 @@ class AlertManager:
         try:
             with _file_lock(self._file):
                 _atomic_write_json(self._file, self._alerts)
+            _ensure_secure_perms(self._file)
         except OSError as e:
             logger.error("Alert-Datei konnte nicht gespeichert werden: %s", e)
 
