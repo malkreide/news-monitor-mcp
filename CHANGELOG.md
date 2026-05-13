@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **`server.py` aufgeteilt (1724 → 180 LoC).** Behebt das `medium`-Finding `ARCH-MONOLITHIC` (Audit 2026-05-13). Reiner Refactor ohne Verhaltensänderung — alle 110 Tests laufen weiter grün. Neue Modul-Aufteilung:
+  - `logging_setup.py` — strukturiertes JSON-Logging + Redaction (`OBS-LOG-UNSTRUCTURED`)
+  - `formatting.py` — Markdown/JSON-Formatter + Enums
+  - `errors.py` — sanitisiertes Exception-Mapping (`SEC-ERROR-PASSTHROUGH`)
+  - `http_auth.py` — Bearer/Origin/RequestId-Middleware (`SEC-HTTP-NO-AUTH`)
+  - `cache.py` — `NewsCache` + `CacheBackend`-Protocol + Sweep-Loop (`SCALE-STATEFUL`)
+  - `alerts/` — `AlertManager`, atomic write, retention, flock (`SEC-ALERTS-PATH`, `ARCH-CONCURRENCY`, `CH-DSG`)
+  - `api_client.py` — httpx + `SecretStr` + `x-api-key`-Header (`SEC-API-KEY-HANDLING`)
+  - `models.py` — alle 13 Pydantic-Input-Modelle
+  - `app.py` — FastMCP-Instanz + Singletons + Lifespan (`SDK-LIFESPAN`)
+  - `tools/monitoring.py` (9 Tools), `tools/alerts_tools.py` (4), `tools/cache_admin.py` (2)
+  - `server.py` — Entry-Point + Backward-Compat-Re-Exports
+- **Backward-Compat:** alle bisherigen Imports aus `news_monitor_mcp.server` funktionieren weiter via Re-Exports. Test- und Downstream-Code muss nicht angepasst werden.
+
 ### Added
 - **LRU-Cap pro Tool-Typ + Background-Cache-Sweep.** Adressiert Teil 1 von `SCALE-STATEFUL` (high, Audit 2026-05-13): unbegrenztes In-Memory-Wachstum bei langer Laufzeit. `NewsCache` nutzt jetzt eine `OrderedDict` mit echtem LRU (`move_to_end` bei Hit); pro Tool-Typ greift ein Cap (`MCP_CACHE_MAX_PER_TYPE`, Default 1000, `0` aus). Ein Background-Task im `server_lifespan` ruft `evict_expired()` periodisch auf (`MCP_CACHE_SWEEP_SECONDS`, Default 300 s).
 - **`CacheBackend`-Protocol.** Strukturelle Schnittstelle (`get`/`set`/`clear`/`evict_expired`/`stats`); macht den Weg frei für einen späteren Redis-Backend ohne Tool-Code-Refactor.

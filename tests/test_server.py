@@ -220,7 +220,7 @@ async def test_news_search_mock():
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "test-key-123"}):
         with patch(
-            "news_monitor_mcp.server._get_client"
+            "news_monitor_mcp.tools.monitoring._get_client"
         ) as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
@@ -248,7 +248,7 @@ async def test_news_search_json_format():
     mock_response.raise_for_status = MagicMock()
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "test-key-123"}):
-        with patch("news_monitor_mcp.server._get_client") as mock_get_client:
+        with patch("news_monitor_mcp.tools.monitoring._get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_client
@@ -270,7 +270,7 @@ async def test_sentiment_monitor_mock():
     mock_response.raise_for_status = MagicMock()
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "test-key-123"}):
-        with patch("news_monitor_mcp.server._get_client") as mock_get_client:
+        with patch("news_monitor_mcp.tools.monitoring._get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_client
@@ -294,7 +294,7 @@ async def test_trend_radar_mock():
     mock_response.raise_for_status = MagicMock()
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "test-key-123"}):
-        with patch("news_monitor_mcp.server._get_client") as mock_get_client:
+        with patch("news_monitor_mcp.tools.monitoring._get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_client
@@ -821,7 +821,7 @@ async def test_news_search_sends_x_api_key_header_not_url_param():
             return _FakeResponse()
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "leak-test-key"}):
-        with patch("news_monitor_mcp.server._get_client", return_value=_FakeClient()):
+        with patch("news_monitor_mcp.tools.monitoring._get_client", return_value=_FakeClient()):
             params = SearchNewsInput(query="zürich", use_cache=False)
             await news_search(params)
 
@@ -871,59 +871,56 @@ def test_handle_api_error_maps_known_status_codes():
 @pytest.mark.asyncio
 async def test_lifespan_closes_lazy_client():
     """Globaler httpx-Client wird beim Lifespan-Exit geschlossen und auf None gesetzt."""
+    import news_monitor_mcp.api_client as api
     import news_monitor_mcp.server as srv
 
     # Sicherstellen, dass Anfangszustand sauber ist
-    if srv._client is not None:
-        await srv._client.aclose()
-        srv._client = None
+    await api.close_client()
 
     client = srv._get_client()
-    assert srv._client is client
+    assert api.get_current_client() is client
     assert client.is_closed is False
 
     async with srv.server_lifespan(srv.mcp) as state:
         assert state == {}
 
     assert client.is_closed is True
-    assert srv._client is None
+    assert api.get_current_client() is None
 
 
 @pytest.mark.asyncio
 async def test_lifespan_is_idempotent_when_client_never_created():
     """Lifespan-Exit darf nicht crashen, wenn _client lazy nie erzeugt wurde."""
+    import news_monitor_mcp.api_client as api
     import news_monitor_mcp.server as srv
 
-    if srv._client is not None:
-        await srv._client.aclose()
-        srv._client = None
+    await api.close_client()
 
     async with srv.server_lifespan(srv.mcp):
         pass  # tool ruft _get_client() nicht auf
 
-    assert srv._client is None
+    assert api.get_current_client() is None
 
 
 @pytest.mark.asyncio
 async def test_lifespan_resets_client_even_if_aclose_raises(monkeypatch, caplog):
     """Wenn aclose() eine Exception wirft, soll _client trotzdem auf None gesetzt werden."""
+    import news_monitor_mcp.api_client as api
     import news_monitor_mcp.server as srv
 
-    if srv._client is not None:
-        await srv._client.aclose()
-        srv._client = None
+    await api.close_client()
 
     class _BrokenClient:
         is_closed = False
         async def aclose(self):
             raise RuntimeError("simulated teardown failure")
 
-    srv._client = _BrokenClient()  # type: ignore[assignment]
+    api._client = _BrokenClient()  # type: ignore[assignment]
 
     async with srv.server_lifespan(srv.mcp):
         pass
 
-    assert srv._client is None
+    assert api.get_current_client() is None
 
 
 def test_fastmcp_instance_has_lifespan_attached():
@@ -1331,10 +1328,9 @@ async def test_server_lifespan_starts_and_stops_sweep_task(monkeypatch):
     import asyncio as _asyncio
     import news_monitor_mcp.server as srv
 
+    import news_monitor_mcp.api_client as api
     monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "1")
-    if srv._client is not None:
-        await srv._client.aclose()
-        srv._client = None
+    await api.close_client()
 
     async with srv.server_lifespan(srv.mcp):
         running = [t for t in _asyncio.all_tasks() if t.get_name() == "cache-sweep"]
@@ -1350,10 +1346,9 @@ async def test_server_lifespan_sweep_zero_disables_task(monkeypatch):
     import asyncio as _asyncio
     import news_monitor_mcp.server as srv
 
+    import news_monitor_mcp.api_client as api
     monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "0")
-    if srv._client is not None:
-        await srv._client.aclose()
-        srv._client = None
+    await api.close_client()
 
     async with srv.server_lifespan(srv.mcp):
         running = [t for t in _asyncio.all_tasks() if t.get_name() == "cache-sweep"]
@@ -1543,7 +1538,10 @@ async def test_alert_delete_without_confirm_returns_prompt(tmp_path, monkeypatch
         "source_country": "ch", "days_back": 7,
         "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
 
-    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+    monkeypatch.setattr(_app, "_alert_manager", mgr)
+    monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id=aid))
     assert "Bestaetigung" in result
     assert "confirm=true" in result
@@ -1563,7 +1561,10 @@ async def test_alert_delete_with_confirm_removes_alert(tmp_path, monkeypatch):
         "source_country": "ch", "days_back": 7,
         "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
 
-    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+    monkeypatch.setattr(_app, "_alert_manager", mgr)
+    monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id=aid, confirm=True))
     assert "geloescht" in result
     assert mgr.get(aid) is None
@@ -1578,7 +1579,10 @@ async def test_alert_delete_nonexistent_does_not_require_confirm(tmp_path, monke
     import news_monitor_mcp.server as srv
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+    monkeypatch.setattr(_app, "_alert_manager", mgr)
+    monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id="alert_doesnotexist"))
     assert "nicht gefunden" in result
 
@@ -1593,7 +1597,10 @@ async def test_cache_clear_without_confirm_returns_prompt(monkeypatch):
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
     cache.set("search", {"q": "b"}, {"d": 2})
-    monkeypatch.setattr(srv, "_cache", cache)
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.cache_admin as _tools_cache
+    monkeypatch.setattr(_app, "_cache", cache)
+    monkeypatch.setattr(_tools_cache, "_cache", cache)
 
     result = await news_cache_clear(CacheClearInput())
     assert "Bestaetigung" in result
@@ -1611,7 +1618,10 @@ async def test_cache_clear_with_confirm_empties_cache(monkeypatch):
 
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
-    monkeypatch.setattr(srv, "_cache", cache)
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.cache_admin as _tools_cache
+    monkeypatch.setattr(_app, "_cache", cache)
+    monkeypatch.setattr(_tools_cache, "_cache", cache)
 
     result = await news_cache_clear(CacheClearInput(confirm=True))
     assert "geleert" in result
@@ -1626,7 +1636,11 @@ async def test_cache_clear_unknown_type_rejects_before_confirm(monkeypatch):
     )
     import news_monitor_mcp.server as srv
 
-    monkeypatch.setattr(srv, "_cache", NewsCache())
+    import news_monitor_mcp.app as _app
+    import news_monitor_mcp.tools.cache_admin as _tools_cache
+    fresh = NewsCache()
+    monkeypatch.setattr(_app, "_cache", fresh)
+    monkeypatch.setattr(_tools_cache, "_cache", fresh)
     result = await news_cache_clear(CacheClearInput(tool_type="nonexistent_typ"))
     assert "Unbekannter Tool-Typ" in result
     assert "Bestaetigung" not in result
