@@ -865,6 +865,74 @@ def test_handle_api_error_maps_known_status_codes():
 
 
 # ---------------------------------------------------------------------------
+# SDK-LIFESPAN Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_lifespan_closes_lazy_client():
+    """Globaler httpx-Client wird beim Lifespan-Exit geschlossen und auf None gesetzt."""
+    import news_monitor_mcp.server as srv
+
+    # Sicherstellen, dass Anfangszustand sauber ist
+    if srv._client is not None:
+        await srv._client.aclose()
+        srv._client = None
+
+    client = srv._get_client()
+    assert srv._client is client
+    assert client.is_closed is False
+
+    async with srv.server_lifespan(srv.mcp) as state:
+        assert state == {}
+
+    assert client.is_closed is True
+    assert srv._client is None
+
+
+@pytest.mark.asyncio
+async def test_lifespan_is_idempotent_when_client_never_created():
+    """Lifespan-Exit darf nicht crashen, wenn _client lazy nie erzeugt wurde."""
+    import news_monitor_mcp.server as srv
+
+    if srv._client is not None:
+        await srv._client.aclose()
+        srv._client = None
+
+    async with srv.server_lifespan(srv.mcp):
+        pass  # tool ruft _get_client() nicht auf
+
+    assert srv._client is None
+
+
+@pytest.mark.asyncio
+async def test_lifespan_resets_client_even_if_aclose_raises(monkeypatch, caplog):
+    """Wenn aclose() eine Exception wirft, soll _client trotzdem auf None gesetzt werden."""
+    import news_monitor_mcp.server as srv
+
+    if srv._client is not None:
+        await srv._client.aclose()
+        srv._client = None
+
+    class _BrokenClient:
+        is_closed = False
+        async def aclose(self):
+            raise RuntimeError("simulated teardown failure")
+
+    srv._client = _BrokenClient()  # type: ignore[assignment]
+
+    async with srv.server_lifespan(srv.mcp):
+        pass
+
+    assert srv._client is None
+
+
+def test_fastmcp_instance_has_lifespan_attached():
+    """Sanity-Check: lifespan ist tatsaechlich am FastMCP-Server registriert."""
+    import news_monitor_mcp.server as srv
+    assert srv.mcp.settings.lifespan is srv.server_lifespan
+
+
+# ---------------------------------------------------------------------------
 # ARCH-CONCURRENCY Tests
 # ---------------------------------------------------------------------------
 
