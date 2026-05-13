@@ -125,6 +125,8 @@ Try it immediately in Claude Desktop:
 | `NEWS_MONITOR_ALERTS_DIR` | `~/.news-monitor-mcp` | Directory that holds `alerts.json`. The parent dir must not be a symlink (refused at startup as a defense against path-injection). File is created with mode `0o600`, directory with `0o700`. |
 | `NEWS_MONITOR_ALERTS_FILE` | – | *(Back-compat)* explicit path to the alerts file. Same symlink check applies. Prefer `NEWS_MONITOR_ALERTS_DIR`. |
 | `MCP_ALERT_RETENTION_DAYS` | `90` | Alerts older than this many days are deleted on server start (Privacy default per [`docs/privacy-dsg.md`](docs/privacy-dsg.md)). Set to `0` to disable retention. |
+| `MCP_CACHE_MAX_PER_TYPE` | `1000` | Maximum cache entries per tool type. When exceeded, the least-recently-used entry of that type is evicted. Set to `0` to disable the cap (unbounded growth — only safe for short-lived processes). |
+| `MCP_CACHE_SWEEP_SECONDS` | `300` | Interval for the background task that removes TTL-expired entries from the cache. Set to `0` to disable the sweep (expired entries are still pruned lazily on `news_cache_stats`). |
 
 ### Claude Desktop Configuration
 
@@ -183,6 +185,16 @@ WORLD_NEWS_API_KEY=your-key \
 curl -i http://127.0.0.1:8000/mcp                                  # → 401
 curl -i -H "Authorization: Bearer $MCP_BEARER_TOKEN" http://127.0.0.1:8000/mcp
 ```
+
+### Scaling notes
+
+This server is currently **single-process / single-replica**:
+
+- The TTL cache lives in process memory (`NewsCache`). If you run multiple Render or Kubernetes replicas, each replica has its **own** cache — hit-rates drop linearly with the replica count.
+- Alerts persist to a local `alerts.json` (defaults to `/data` inside the container). Multiple replicas mounting the **same** persistent volume serialize via `fcntl.flock`, but for true cluster operation a shared store (Redis / Postgres) is needed — see the open finding [`SCALE-STATEFUL`](audits/2026-05-13-news-monitor-mcp/findings/SCALE-stateful-singletons.md).
+- On **Render Free Tier**, the container sleeps after ~15 minutes of inactivity and loses non-persistent state. Attach a Persistent Disk for `/data` if you need alerts to survive restarts. For Render Free + alerts you must accept that the cache is lost on every wake-up.
+
+The `MCP_CACHE_MAX_PER_TYPE` cap (default `1000` entries / type) and the background sweep (`MCP_CACHE_SWEEP_SECONDS`, default 5 min) prevent the in-process cache from growing without bound.
 
 ### Container image
 

@@ -16,6 +16,7 @@ API key required: Kostenloser Key via https://worldnewsapi.com/console/
 Set environment variable: WORLD_NEWS_API_KEY
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -27,12 +28,13 @@ import tempfile
 import threading
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta
 from enum import Enum
 from logging.config import dictConfig
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, Optional, Protocol
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -163,6 +165,52 @@ CACHE_TTL: dict[str, int] = {
     "geo": 1800,
 }
 
+CACHE_MAX_PER_TYPE_DEFAULT = 1000
+CACHE_SWEEP_SECONDS_DEFAULT = 300
+
+
+def _get_cache_max_per_type() -> int:
+    """Liest `MCP_CACHE_MAX_PER_TYPE` aus dem Env. `0` deaktiviert den Cap."""
+    raw = os.environ.get("MCP_CACHE_MAX_PER_TYPE")
+    if raw is None:
+        return CACHE_MAX_PER_TYPE_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("MCP_CACHE_MAX_PER_TYPE=%r keine Zahl – fallback auf %d",
+                       raw, CACHE_MAX_PER_TYPE_DEFAULT)
+        return CACHE_MAX_PER_TYPE_DEFAULT
+    return max(value, 0)
+
+
+def _get_cache_sweep_seconds() -> int:
+    """Liest `MCP_CACHE_SWEEP_SECONDS`. `0` deaktiviert den Background-Sweep."""
+    raw = os.environ.get("MCP_CACHE_SWEEP_SECONDS")
+    if raw is None:
+        return CACHE_SWEEP_SECONDS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("MCP_CACHE_SWEEP_SECONDS=%r keine Zahl – fallback auf %d s",
+                       raw, CACHE_SWEEP_SECONDS_DEFAULT)
+        return CACHE_SWEEP_SECONDS_DEFAULT
+    return max(value, 0)
+
+
+class CacheBackend(Protocol):
+    """Schmale Schnittstelle für Cache-Implementierungen.
+
+    Aktuell nur `NewsCache` (in-memory) — diese Protokoll-Definition existiert,
+    damit ein späterer PR einen Redis-Backend nahtlos einklinken kann
+    (siehe Finding `SCALE-STATEFUL`, Roadmap-Schritt 2).
+    """
+
+    def get(self, tool_type: str, params: dict[str, Any]) -> Optional[Any]: ...
+    def set(self, tool_type: str, params: dict[str, Any], data: Any) -> None: ...
+    def clear(self, tool_type: Optional[str] = None) -> int: ...
+    def evict_expired(self) -> int: ...
+    def stats(self) -> dict[str, Any]: ...
+
 ALERTS_DIR_DEFAULT = os.path.expanduser("~/.news-monitor-mcp")
 
 ALERT_RETENTION_DAYS_DEFAULT = 90
@@ -245,10 +293,28 @@ ALERTS_FILE = _resolve_alerts_path()
 
 
 class NewsCache:
-    def __init__(self) -> None:
-        self._store: dict[str, tuple[float, str, Any]] = {}
+    """In-Memory-Cache mit TTL pro Tool-Typ und LRU-Cap pro Tool-Typ.
+
+    Implementiert das `CacheBackend`-Protokoll.
+
+    Speicher: `OrderedDict[key, (timestamp, tool_type, data)]`. Ein erfolgreicher
+    `get()` ruft `move_to_end(key)` → klassische LRU-Ordnung. Bei `set()` wird
+    geprueft, ob der Cap pro Tool-Typ ueberschritten waere; in dem Fall werden
+    die am laengsten ungenutzten Eintraege desselben Typs verdraengt
+    (Standard: 1000 Eintraege pro Typ, konfigurierbar via
+    `MCP_CACHE_MAX_PER_TYPE`; `0` deaktiviert den Cap).
+
+    Verhindert OOM bei Long-Running-Servern mit hoher Query-Diversitaet
+    (Finding `SCALE-STATEFUL`, Schritt 5).
+    """
+
+    def __init__(self, max_per_type: Optional[int] = None) -> None:
+        self._store: OrderedDict[str, tuple[float, str, Any]] = OrderedDict()
         self._hits = 0
         self._misses = 0
+        self._evicted_by_cap = 0
+        self._max_per_type = (max_per_type if max_per_type is not None
+                              else _get_cache_max_per_type())
 
     def _make_key(self, tool_type: str, params: dict[str, Any]) -> str:
         # sha256 statt md5: kein FIPS-Block (RHEL/CentOS mit fips-mode) und keine
@@ -268,12 +334,40 @@ class NewsCache:
             del self._store[key]
             self._misses += 1
             return None
+        # LRU: most-recently-used wandert ans Ende der OrderedDict.
+        self._store.move_to_end(key)
         self._hits += 1
         return data
 
     def set(self, tool_type: str, params: dict[str, Any], data: Any) -> None:
         key = self._make_key(tool_type, params)
+        # Wenn Key existiert: Update + ans Ende verschieben.
+        if key in self._store:
+            self._store[key] = (time.time(), tool_type, data)
+            self._store.move_to_end(key)
+            return
+        self._enforce_cap(tool_type)
         self._store[key] = (time.time(), tool_type, data)
+
+    def _enforce_cap(self, tool_type: str) -> None:
+        """Verdraengt LRU-Eintraege desselben Tool-Typs, bis Platz fuer einen
+        neuen Eintrag da ist."""
+        if self._max_per_type <= 0:
+            return
+        # Count existing entries of this type.
+        same_type_count = sum(1 for _, t, _ in self._store.values() if t == tool_type)
+        if same_type_count < self._max_per_type:
+            return
+        # Walk insertion order (left = oldest) and evict entries of this type
+        # until we'd fit one more.
+        to_evict = same_type_count - self._max_per_type + 1
+        for k in list(self._store.keys()):
+            if to_evict <= 0:
+                break
+            if self._store[k][1] == tool_type:
+                del self._store[k]
+                self._evicted_by_cap += 1
+                to_evict -= 1
 
     def clear(self, tool_type: Optional[str] = None) -> int:
         if tool_type is None:
@@ -305,6 +399,8 @@ class NewsCache:
             "misses": self._misses,
             "hit_rate": f"{self._hits / total:.1%}" if total > 0 else "n/a",
             "api_calls_gespart": self._hits,
+            "max_eintraege_pro_typ": self._max_per_type,
+            "verdraengt_durch_cap": self._evicted_by_cap,
             "ttl_sekunden": CACHE_TTL,
         }
 
@@ -510,19 +606,55 @@ _cache = NewsCache()
 _alert_manager = AlertManager()
 
 
+async def _cache_sweep_loop(cache: CacheBackend, interval_seconds: int) -> None:
+    """Aktiver Hintergrund-Sweep, der periodisch abgelaufene Cache-Eintraege
+    entfernt. Verhindert, dass `NewsCache._store` ueber Stunden mit toten
+    Eintraegen voll laeuft, wenn `stats()` selten aufgerufen wird (das war
+    bisher die einzige Eviction-Trigger-Stelle).
+
+    Cancellation-clean: `CancelledError` wird durchgereicht.
+    """
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+        except asyncio.CancelledError:
+            raise
+        try:
+            removed = cache.evict_expired()
+            if removed:
+                logger.debug("cache sweep: %d abgelaufene Eintraege entfernt", removed)
+        except Exception:  # noqa: BLE001
+            logger.exception("cache sweep failed")
+
+
 @asynccontextmanager
 async def server_lifespan(_server: Any):
     """FastMCP-Lifespan: räumt prozessglobale Ressourcen beim Shutdown auf.
 
-    Konkret: schliesst den lazy erzeugten `_client` (httpx.AsyncClient), damit
-    offene TCP-Verbindungen zu WorldNewsAPI sauber abgebaut werden und keine
-    ResourceWarnings entstehen. Wird sowohl für stdio- als auch streamable-http
-    Transport aufgerufen.
+    Konkret:
+      * Startet einen Background-Cache-Sweep (Eviction abgelaufener Eintraege),
+        konfigurierbar via `MCP_CACHE_SWEEP_SECONDS` (Default 300 s, `0` aus).
+      * Schliesst den lazy erzeugten `_client` (httpx.AsyncClient), damit
+        offene TCP-Verbindungen zu WorldNewsAPI sauber abgebaut werden und
+        keine ResourceWarnings entstehen.
+    Wird sowohl fuer stdio- als auch streamable-http Transport aufgerufen.
     """
     global _client
+    sweep_seconds = _get_cache_sweep_seconds()
+    sweep_task: Optional[asyncio.Task[None]] = None
+    if sweep_seconds > 0:
+        sweep_task = asyncio.create_task(
+            _cache_sweep_loop(_cache, sweep_seconds), name="cache-sweep"
+        )
     try:
         yield {}
     finally:
+        if sweep_task is not None:
+            sweep_task.cancel()
+            try:
+                await sweep_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
         if _client is not None:
             try:
                 await _client.aclose()
