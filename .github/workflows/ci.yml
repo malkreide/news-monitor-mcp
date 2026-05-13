@@ -58,3 +58,36 @@ jobs:
 
       # ruff format --check vorerst deaktiviert (Refactoring ausstehend)
       # - run: python -m ruff format --check src/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: news-monitor-mcp:ci
+          load: true
+
+      - name: Smoke-Test — `--help` aus dem Image
+        run: |
+          docker run --rm --entrypoint news-monitor-mcp news-monitor-mcp:ci --help
+
+      - name: Smoke-Test — Auth wird im HTTP-Mode erzwungen
+        run: |
+          # MCP_BEARER_TOKEN ist Pflicht: ohne den Token muss der Container
+          # mit Exit-Code 2 abbrechen (siehe PR #2 / SEC-HTTP-NO-AUTH).
+          set +e
+          docker run --rm news-monitor-mcp:ci
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then
+            echo "expected exit 2 when MCP_BEARER_TOKEN unset, got $rc"
+            exit 1
+          fi

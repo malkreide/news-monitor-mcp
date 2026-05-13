@@ -173,7 +173,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 4. In claude.ai under Settings → MCP Servers, add the URL `https://your-app.onrender.com/mcp` and configure the Bearer token as the auth header.
 
 ```bash
-# Docker / local HTTP mode (binds 127.0.0.1 by default)
+# Local HTTP mode (binds 127.0.0.1 by default)
 WORLD_NEWS_API_KEY=your-key \
   MCP_BEARER_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))") \
   news-monitor-mcp --http --port 8000
@@ -181,6 +181,21 @@ WORLD_NEWS_API_KEY=your-key \
 # Verify auth is enforced
 curl -i http://127.0.0.1:8000/mcp                                  # → 401
 curl -i -H "Authorization: Bearer $MCP_BEARER_TOKEN" http://127.0.0.1:8000/mcp
+```
+
+### Container image
+
+A non-root multi-stage `Dockerfile` is included and built on every CI run. Inside the container the server defaults to `--http`, binds `0.0.0.0:8000`, persists alerts under `/data`, and refuses to start if `MCP_BEARER_TOKEN` is missing.
+
+```bash
+docker build -t news-monitor-mcp .
+
+docker run --rm -p 8000:8000 \
+  -e WORLD_NEWS_API_KEY=your-key \
+  -e MCP_BEARER_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))") \
+  -e MCP_ALLOWED_ORIGINS=https://claude.ai \
+  -v news-monitor-data:/data \
+  news-monitor-mcp
 ```
 
 ---

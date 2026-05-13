@@ -1,0 +1,28 @@
+.git/
+.github/
+.gitignore
+
+# Local dev artefacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Tests, audits, docs that aren't needed at runtime
+tests/
+audits/
+EXAMPLES.md
+CONTRIBUTING.md
+CHANGELOG.md
+README.de.md
+assets/
+
+# Secrets
+.env
+*.log
