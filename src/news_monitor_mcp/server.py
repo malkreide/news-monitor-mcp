@@ -33,7 +33,7 @@ from typing import Any, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -49,6 +49,7 @@ _request_id: ContextVar[str] = ContextVar("request_id", default="-")
 _redaction_patterns: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(api[-_]key=)[^&\s\"']+", re.IGNORECASE), r"\1***"),
     (re.compile(r"(authorization:\s*bearer\s+)\S+", re.IGNORECASE), r"\1***"),
+    (re.compile(r"(x-api-key['\"]?\s*[:=]\s*['\"]?)[^\s,'\"}]+", re.IGNORECASE), r"\1***"),
 ]
 
 
@@ -322,8 +323,14 @@ mcp = FastMCP(
 
 _client: Optional[httpx.AsyncClient] = None
 
-def _get_api_key() -> Optional[str]:
-    return os.environ.get("WORLD_NEWS_API_KEY")
+
+def _get_api_key() -> Optional[SecretStr]:
+    """Liest den API-Key aus dem Env und wickelt ihn in SecretStr, um versehentliche
+    Stringifizierung in Logs/Repr zu verhindern. SecretStr.__repr__ liefert
+    '**********', SecretStr.__str__ ebenfalls — nur .get_secret_value() entpackt."""
+    raw = os.environ.get("WORLD_NEWS_API_KEY")
+    return SecretStr(raw) if raw else None
+
 
 def _get_client() -> httpx.AsyncClient:
     global _client
@@ -332,8 +339,18 @@ def _get_client() -> httpx.AsyncClient:
             headers={"User-Agent": "news-monitor-mcp/0.2.0"})
     return _client
 
-def _check_api_key() -> Optional[str]:
+
+def _check_api_key() -> Optional[SecretStr]:
     return _get_api_key()
+
+
+def _auth_headers(api_key: SecretStr) -> dict[str, str]:
+    """Header-basierte Auth fuer WorldNewsAPI (https://worldnewsapi.com/docs/authentication/).
+
+    Vermeidet, dass der Key als URL-Query-Parameter in HTTP-Logs, Proxy-Caches
+    oder Tracing-Backends landet.
+    """
+    return {"x-api-key": api_key.get_secret_value()}
 
 def _no_key_message(tool_name: str) -> str:
     return (f"Kein API-Key fuer '{tool_name}' konfiguriert.\n"
@@ -381,6 +398,8 @@ def _format_articles_markdown(articles: list[dict[str, Any]],
     return "\n".join(lines)
 
 def _handle_api_error(e: Exception) -> str:
+    """Mappt httpx-Exceptions auf nutzerfreundliche Strings, ohne `str(e)` an den
+    Client durchzureichen. Stacktrace + URL gehen ins Server-Log (mit Redaction)."""
     if isinstance(e, httpx.HTTPStatusError):
         if e.response.status_code == 401: return "Fehler: Ungültiger API-Key."
         if e.response.status_code == 402: return "Fehler: API-Kontingent erschöpft."
@@ -388,7 +407,8 @@ def _handle_api_error(e: Exception) -> str:
         return f"API-Fehler: HTTP {e.response.status_code}"
     if isinstance(e, httpx.TimeoutException): return "Fehler: Timeout."
     if isinstance(e, httpx.ConnectError): return "Fehler: Keine Verbindung zur WorldNewsAPI."
-    return f"Fehler: {type(e).__name__}: {e!s}"
+    logger.exception("Unerwarteter API-Fehler")
+    return f"Fehler: {type(e).__name__} – Details siehe Server-Log"
 
 def _calc_avg_sentiment(articles: list[dict[str, Any]]) -> Optional[float]:
     scores = [a["sentiment"] for a in articles if a.get("sentiment") is not None]
@@ -591,14 +611,14 @@ async def news_search(params: SearchNewsInput) -> str:
         if data is not None:
             cache_info = "\n> ℹ️ *Aus Cache (TTL: 30 Min) – `use_cache=False` fuer frische Daten*\n"
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "text": params.query,
+        p: dict[str, Any] = {"text": params.query,
             "number": params.number, "sort": params.sort.value, "sort-direction": "DESC"}
         if params.language: p["language"] = params.language
         if params.source_country: p["source-country"] = params.source_country
         if params.earliest_date: p["earliest-publish-date"] = f"{params.earliest_date} 00:00:00"
         if params.latest_date: p["latest-publish-date"] = f"{params.latest_date} 23:59:59"
         try:
-            r = await _get_client().get("/search-news", params=p)
+            r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("search", cache_params, data)
@@ -637,11 +657,11 @@ async def news_top_headlines(params: TopNewsInput) -> str:
         data = _cache.get("headlines", cache_params)
         if data is not None: cache_info = "\n> ℹ️ *Aus Cache (TTL: 15 Min)*\n"
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "source-country": params.source_country,
+        p: dict[str, Any] = {"source-country": params.source_country,
             "language": params.language, "number": params.number}
         if params.date: p["date"] = params.date
         try:
-            r = await _get_client().get("/top-news", params=p)
+            r = await _get_client().get("/top-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("headlines", cache_params, data)
@@ -691,14 +711,14 @@ async def news_sentiment_monitor(params: SentimentMonitorInput) -> str:
         data = _cache.get("sentiment", cache_params)
         if data is not None: cache_info = "\n> ℹ️ *Aus Cache (TTL: 60 Min)*\n"
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "text": params.entity, "language": params.language,
+        p: dict[str, Any] = {"text": params.entity, "language": params.language,
             "number": params.number,
             "earliest-publish-date": earliest_dt.strftime("%Y-%m-%d 00:00:00"),
             "latest-publish-date": latest_dt.strftime("%Y-%m-%d 23:59:59"),
             "sort": "publish-time", "sort-direction": "DESC"}
         if params.source_country: p["source-country"] = params.source_country
         try:
-            r = await _get_client().get("/search-news", params=p)
+            r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("sentiment", cache_params, data)
@@ -765,13 +785,13 @@ async def news_media_briefing(params: MediaBriefingInput) -> str:
         if params.use_cache:
             data = _cache.get("briefing", cache_params)
         if data is None:
-            p: dict[str, Any] = {"api-key": api_key, "text": topic, "language": params.language,
+            p: dict[str, Any] = {"text": topic, "language": params.language,
                 "source-country": params.source_country, "number": 5,
                 "earliest-publish-date": earliest_dt.strftime("%Y-%m-%d 00:00:00"),
                 "latest-publish-date": latest_dt.strftime("%Y-%m-%d 23:59:59"),
                 "sort": "publish-time", "sort-direction": "DESC"}
             try:
-                r = await _get_client().get("/search-news", params=p)
+                r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
                 r.raise_for_status()
                 data = r.json()
                 if params.use_cache: _cache.set("briefing", cache_params, data)
@@ -811,7 +831,7 @@ async def news_retrieve_article(params: RetrieveArticleInput) -> str:
     if params.use_cache: data = _cache.get("article", cache_params)
     if data is None:
         try:
-            r = await _get_client().get("/retrieve-news", params={"api-key": api_key, "ids": params.article_id})
+            r = await _get_client().get("/retrieve-news", params={"ids": params.article_id}, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("article", cache_params, data)
@@ -847,12 +867,12 @@ async def news_search_sources(params: SearchSourcesInput) -> str:
     data = None
     if params.use_cache: data = _cache.get("sources", cache_params)
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "number": params.number}
+        p: dict[str, Any] = {"number": params.number}
         if params.name: p["name"] = params.name
         if params.country: p["source-country"] = params.country
         if params.language: p["language"] = params.language
         try:
-            r = await _get_client().get("/search-news-sources", params=p)
+            r = await _get_client().get("/search-news-sources", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("sources", cache_params, data)
@@ -883,11 +903,11 @@ async def news_front_pages(params: FrontPagesInput) -> str:
     data = None
     if params.use_cache: data = _cache.get("front_pages", cache_params)
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "source-country": params.source_country}
+        p: dict[str, Any] = {"source-country": params.source_country}
         if params.source_name: p["source-name"] = params.source_name
         if params.date: p["date"] = params.date
         try:
-            r = await _get_client().get("/retrieve-front-page", params=p)
+            r = await _get_client().get("/retrieve-front-page", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("front_pages", cache_params, data)
@@ -925,13 +945,13 @@ async def news_trend_radar(params: TrendRadarInput) -> str:
     data = None
     if params.use_cache: data = _cache.get("trend", cache_params)
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "source-country": params.source_country,
+        p: dict[str, Any] = {"source-country": params.source_country,
             "language": params.language, "categories": params.category, "number": params.number,
             "earliest-publish-date": earliest_dt.strftime("%Y-%m-%d 00:00:00"),
             "latest-publish-date": latest_dt.strftime("%Y-%m-%d 23:59:59"),
             "sort": "publish-time", "sort-direction": "DESC"}
         try:
-            r = await _get_client().get("/search-news", params=p)
+            r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("trend", cache_params, data)
@@ -968,13 +988,13 @@ async def news_geo_search(params: GeoNewsInput) -> str:
     data = None
     if params.use_cache: data = _cache.get("geo", cache_params)
     if data is None:
-        p: dict[str, Any] = {"api-key": api_key, "text": search_text, "language": params.language,
+        p: dict[str, Any] = {"text": search_text, "language": params.language,
             "source-country": "ch,de,at,fr,it", "number": params.number,
             "earliest-publish-date": earliest_dt.strftime("%Y-%m-%d 00:00:00"),
             "latest-publish-date": latest_dt.strftime("%Y-%m-%d 23:59:59"),
             "sort": "publish-time", "sort-direction": "DESC"}
         try:
-            r = await _get_client().get("/search-news", params=p)
+            r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             if params.use_cache: _cache.set("geo", cache_params, data)
@@ -1094,14 +1114,14 @@ async def news_alert_check(params: CheckAlertsInput) -> str:
     for alert in alerts_to_check:
         latest_dt = datetime.now()
         earliest_dt = latest_dt - timedelta(days=alert.get("days_back", 7))
-        p: dict[str, Any] = {"api-key": api_key, "text": alert["entity"],
+        p: dict[str, Any] = {"text": alert["entity"],
             "language": alert.get("language", "de"), "number": 20,
             "earliest-publish-date": earliest_dt.strftime("%Y-%m-%d 00:00:00"),
             "latest-publish-date": latest_dt.strftime("%Y-%m-%d 23:59:59"),
             "sort": "publish-time", "sort-direction": "DESC"}
         if alert.get("source_country"): p["source-country"] = alert["source_country"]
         try:
-            r = await _get_client().get("/search-news", params=p)
+            r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
             articles = data.get("news", [])

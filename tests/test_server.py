@@ -762,3 +762,119 @@ async def test_request_id_middleware_preserves_incoming_id():
     r = client.get("/mcp", headers={"x-request-id": "client-supplied-id"})
     assert r.headers["x-request-id"] == "client-supplied-id"
 
+
+# ---------------------------------------------------------------------------
+# SEC-API-KEY-HANDLING Tests
+# ---------------------------------------------------------------------------
+
+def test_get_api_key_returns_secretstr_when_set(monkeypatch):
+    from pydantic import SecretStr
+    from news_monitor_mcp.server import _get_api_key
+
+    monkeypatch.setenv("WORLD_NEWS_API_KEY", "my-super-secret-key")
+    key = _get_api_key()
+    assert isinstance(key, SecretStr)
+    assert key.get_secret_value() == "my-super-secret-key"
+
+
+def test_get_api_key_returns_none_when_unset(monkeypatch):
+    from news_monitor_mcp.server import _get_api_key
+
+    monkeypatch.delenv("WORLD_NEWS_API_KEY", raising=False)
+    assert _get_api_key() is None
+
+
+def test_secretstr_str_repr_does_not_leak():
+    from pydantic import SecretStr
+
+    key = SecretStr("my-super-secret-key")
+    assert "my-super-secret-key" not in str(key)
+    assert "my-super-secret-key" not in repr(key)
+
+
+def test_auth_headers_returns_x_api_key():
+    from pydantic import SecretStr
+    from news_monitor_mcp.server import _auth_headers
+
+    headers = _auth_headers(SecretStr("k-123"))
+    assert headers == {"x-api-key": "k-123"}
+
+
+@pytest.mark.asyncio
+async def test_news_search_sends_x_api_key_header_not_url_param():
+    """Verifiziert, dass news_search den Key per Header sendet und nichts in den URL-Params landet."""
+    captured = {}
+
+    class _FakeResponse:
+        def __init__(self):
+            self.status_code = 200
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"news": [], "available": 0}
+
+    class _FakeClient:
+        async def get(self, url, params=None, headers=None):
+            captured["url"] = url
+            captured["params"] = dict(params) if params else {}
+            captured["headers"] = dict(headers) if headers else {}
+            return _FakeResponse()
+
+    with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "leak-test-key"}):
+        with patch("news_monitor_mcp.server._get_client", return_value=_FakeClient()):
+            params = SearchNewsInput(query="zürich", use_cache=False)
+            await news_search(params)
+
+    # Header MUST carry the key
+    assert captured["headers"].get("x-api-key") == "leak-test-key"
+    # URL params MUST NOT contain the key under any spelling
+    for k, v in captured["params"].items():
+        assert "leak-test-key" not in str(v), f"key leaked into params[{k}]={v}"
+        assert k.lower() not in {"api-key", "api_key", "apikey"}, f"forbidden param key: {k}"
+
+
+def test_handle_api_error_does_not_echo_raw_exception_string():
+    from news_monitor_mcp.server import _handle_api_error
+
+    class _LeakyError(Exception):
+        def __str__(self):
+            return "https://api.worldnewsapi.com/search-news?api-key=LEAKED_SECRET_KEY&q=foo"
+
+    result = _handle_api_error(_LeakyError("ignored"))
+    assert "LEAKED_SECRET_KEY" not in result
+    assert "api-key=" not in result
+    assert "_LeakyError" in result  # type name is fine, content is not
+
+
+def test_handle_api_error_maps_known_status_codes():
+    from news_monitor_mcp.server import _handle_api_error
+    import httpx
+
+    def _make(status):
+        req = httpx.Request("GET", "https://example.invalid/x?api-key=SHOULDNOTAPPEAR")
+        resp = httpx.Response(status, request=req)
+        return httpx.HTTPStatusError("boom", request=req, response=resp)
+
+    assert "Ungültiger API-Key" in _handle_api_error(_make(401))
+    assert "Kontingent" in _handle_api_error(_make(402))
+    assert "Rate Limit" in _handle_api_error(_make(429))
+    # Generic 5xx returns only the status code, never the URL
+    msg = _handle_api_error(_make(503))
+    assert "503" in msg
+    assert "SHOULDNOTAPPEAR" not in msg
+
+
+def test_redaction_pattern_masks_x_api_key_header_dump():
+    from news_monitor_mcp.server import logger as srv_logger
+    root, buf, restore = _capture_logs()
+    try:
+        srv_logger.info("request headers: {'x-api-key': 'SUPERSECRET'}")
+        srv_logger.info("curl -H 'x-api-key: ANOTHERSECRET' https://api.example.com/x")
+    finally:
+        restore()
+    lines = [_json.loads(line)["msg"] for line in buf.getvalue().strip().splitlines()]
+    blob = "\n".join(lines)
+    assert "SUPERSECRET" not in blob
+    assert "ANOTHERSECRET" not in blob
+    assert "***" in blob
+
