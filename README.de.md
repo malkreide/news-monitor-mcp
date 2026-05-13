@@ -359,6 +359,14 @@ Dieser MCP-Server ist ein unabhängiges Open-Source-Projekt und steht in keiner 
 
 ---
 
+## Sicherheit & Compliance
+
+- Schwachstellen privat melden: siehe [SECURITY.md](SECURITY.md)
+- Schweizer Behörden-Einsatz: [`docs/isds-klassifikation.md`](docs/isds-klassifikation.md) (ISDS / Schutzbedarfsfeststellung)
+- Audit-Historie: [`audits/`](audits/)
+
+---
+
 ## Changelog
 
 Siehe [CHANGELOG.md](CHANGELOG.md)

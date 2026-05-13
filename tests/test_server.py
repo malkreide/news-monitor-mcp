@@ -1163,6 +1163,112 @@ def test_ensure_secure_perms_sets_0o700_on_parent(tmp_path):
     assert mode == 0o700
 
 
+# ---------------------------------------------------------------------------
+# HITL-DESTRUCTIVE Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_alert_delete_without_confirm_returns_prompt(tmp_path, monkeypatch):
+    """news_alert_delete ohne confirm=True darf NICHT loeschen."""
+    from news_monitor_mcp.server import (
+        AlertManager, DeleteAlertInput, news_alert_delete,
+    )
+    import news_monitor_mcp.server as srv
+
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+
+    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    result = await news_alert_delete(DeleteAlertInput(alert_id=aid))
+    assert "Bestaetigung" in result
+    assert "confirm=true" in result
+    # Alert ist NICHT geloescht
+    assert mgr.get(aid) is not None
+
+
+@pytest.mark.asyncio
+async def test_alert_delete_with_confirm_removes_alert(tmp_path, monkeypatch):
+    from news_monitor_mcp.server import (
+        AlertManager, DeleteAlertInput, news_alert_delete,
+    )
+    import news_monitor_mcp.server as srv
+
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
+        "source_country": "ch", "days_back": 7,
+        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+
+    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    result = await news_alert_delete(DeleteAlertInput(alert_id=aid, confirm=True))
+    assert "geloescht" in result
+    assert mgr.get(aid) is None
+
+
+@pytest.mark.asyncio
+async def test_alert_delete_nonexistent_does_not_require_confirm(tmp_path, monkeypatch):
+    """Nicht-existente Alert-ID liefert sofort 'nicht gefunden', nicht den Prompt."""
+    from news_monitor_mcp.server import (
+        AlertManager, DeleteAlertInput, news_alert_delete,
+    )
+    import news_monitor_mcp.server as srv
+
+    mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
+    monkeypatch.setattr(srv, "_alert_manager", mgr)
+    result = await news_alert_delete(DeleteAlertInput(alert_id="alert_doesnotexist"))
+    assert "nicht gefunden" in result
+
+
+@pytest.mark.asyncio
+async def test_cache_clear_without_confirm_returns_prompt(monkeypatch):
+    from news_monitor_mcp.server import (
+        CacheClearInput, NewsCache, news_cache_clear,
+    )
+    import news_monitor_mcp.server as srv
+
+    cache = NewsCache()
+    cache.set("search", {"q": "a"}, {"d": 1})
+    cache.set("search", {"q": "b"}, {"d": 2})
+    monkeypatch.setattr(srv, "_cache", cache)
+
+    result = await news_cache_clear(CacheClearInput())
+    assert "Bestaetigung" in result
+    assert "confirm=true" in result
+    # Cache nicht geleert
+    assert cache.get("search", {"q": "a"}) is not None
+
+
+@pytest.mark.asyncio
+async def test_cache_clear_with_confirm_empties_cache(monkeypatch):
+    from news_monitor_mcp.server import (
+        CacheClearInput, NewsCache, news_cache_clear,
+    )
+    import news_monitor_mcp.server as srv
+
+    cache = NewsCache()
+    cache.set("search", {"q": "a"}, {"d": 1})
+    monkeypatch.setattr(srv, "_cache", cache)
+
+    result = await news_cache_clear(CacheClearInput(confirm=True))
+    assert "geleert" in result
+    assert cache.get("search", {"q": "a"}) is None
+
+
+@pytest.mark.asyncio
+async def test_cache_clear_unknown_type_rejects_before_confirm(monkeypatch):
+    """Validation-Fehler bei tool_type kommt vor dem confirm-Check."""
+    from news_monitor_mcp.server import (
+        CacheClearInput, NewsCache, news_cache_clear,
+    )
+    import news_monitor_mcp.server as srv
+
+    monkeypatch.setattr(srv, "_cache", NewsCache())
+    result = await news_cache_clear(CacheClearInput(tool_type="nonexistent_typ"))
+    assert "Unbekannter Tool-Typ" in result
+    assert "Bestaetigung" not in result
+
+
 def test_alert_manager_creates_file_with_0o600(tmp_path):
     import os as _os
     import stat as _stat
