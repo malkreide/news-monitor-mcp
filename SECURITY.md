@@ -1,4 +1,8 @@
-# Security Policy
+# 🛡️ Security Policy & Posture
+
+[🇩🇪 Deutsche Version](SECURITY.de.md)
+
+---
 
 ## Reporting a Vulnerability
 
