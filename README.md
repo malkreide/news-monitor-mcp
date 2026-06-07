@@ -406,3 +406,5 @@ Hayal Oezkan · [malkreide](https://github.com/malkreide)
 - **Related:** [swiss-culture-mcp](https://github.com/malkreide/swiss-culture-mcp) – MCP server for Swiss cultural heritage data
 - **Related:** [srgssr-mcp](https://github.com/malkreide/srgssr-mcp) – MCP server for SRG SSR Swiss public media
 - **Portfolio:** [Swiss Public Data MCP Portfolio](https://github.com/malkreide)
+
+<!-- mcp-name: io.github.malkreide/news-monitor-mcp -->

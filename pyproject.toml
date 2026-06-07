@@ -48,7 +48,6 @@ dev = [
 news-monitor-mcp = "news_monitor_mcp.server:main"
 
 [project.urls]
-"mcp-name" = "io.github.malkreide/news-monitor-mcp"
 Homepage = "https://github.com/malkreide/news-monitor-mcp"
 Repository = "https://github.com/malkreide/news-monitor-mcp"
 Issues = "https://github.com/malkreide/news-monitor-mcp/issues"
