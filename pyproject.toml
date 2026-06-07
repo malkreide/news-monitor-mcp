@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "news-monitor-mcp"
-version = "0.3.3"
+version = "0.3.4"
 description = "MCP server for global news monitoring via WorldNewsAPI – search, sentiment analysis, top headlines, and media monitoring for Swiss public institutions"
 readme = "README.md"
 license = { text = "MIT" }
