@@ -378,6 +378,12 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) ([Deutsch](CONTRIBUTING.de.md)).
+
+---
+
 ## Security & Compliance
 
 - Report vulnerabilities privately: see [SECURITY.md](SECURITY.md)

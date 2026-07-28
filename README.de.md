@@ -362,6 +362,12 @@ Dieser MCP-Server ist ein unabhängiges Open-Source-Projekt und steht in keiner 
 
 ---
 
+## Mitwirken
+
+Siehe [CONTRIBUTING.de.md](CONTRIBUTING.de.md) ([English](CONTRIBUTING.md)).
+
+---
+
 ## Sicherheit & Compliance
 
 - Schwachstellen privat melden: siehe [SECURITY.md](SECURITY.md)
