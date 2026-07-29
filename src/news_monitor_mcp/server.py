@@ -6,7 +6,7 @@ Benachrichtigungen via WorldNewsAPI. **Die Implementation lebt in Submodulen**:
     api_client      — httpx + SecretStr + x-api-key-Header (SEC-API-KEY-HANDLING)
     alerts/         — AlertManager + atomic write + retention (SEC-ALERTS-PATH,
                       ARCH-CONCURRENCY, CH-DSG)
-    app             — FastMCP-Instanz + Singletons + Lifespan (SDK-LIFESPAN)
+    app             — MCPServer-Instanz + Singletons + Lifespan (SDK-LIFESPAN)
     cache           — NewsCache + LRU-Cap + Sweep-Loop (SCALE-STATEFUL)
     errors          — _handle_api_error (SEC-ERROR-PASSTHROUGH)
     formatting      — Markdown/JSON + Enums
@@ -17,7 +17,7 @@ Benachrichtigungen via WorldNewsAPI. **Die Implementation lebt in Submodulen**:
 
 Diese Datei haelt nur noch:
   * `main()` als Konsolen-Entry-Point
-  * `build_http_app()` Helper (braucht die FastMCP-Instanz)
+  * `build_http_app()` Helper (braucht die MCPServer-Instanz)
   * Backward-Compat-Re-Exports — Tests und externer Code importieren weiter aus
     `news_monitor_mcp.server`, ohne von der internen Modul-Aufteilung zu wissen.
 
@@ -35,7 +35,7 @@ from typing import Any
 import news_monitor_mcp.api_client as _api_client_module  # noqa: F401
 
 # Trigger tool registration. Importing the tools package runs the @mcp.tool
-# decorators in each submodule against the FastMCP instance from app.py.
+# decorators in each submodule against the MCPServer instance from app.py.
 import news_monitor_mcp.tools  # noqa: F401, E402
 from news_monitor_mcp.alerts import (  # noqa: F401
     ALERT_RETENTION_DAYS_DEFAULT,
@@ -177,11 +177,17 @@ def build_transport_security(host: str, port: int, allowed_origins: frozenset[st
     )
 
 
-def build_http_app(token: str, allowed_origins: frozenset[str]) -> Any:
-    """Thin wrapper: zieht die Starlette-App aus der FastMCP-Instanz und hängt
+def build_http_app(
+    token: str, allowed_origins: frozenset[str], security=None, host: str = "127.0.0.1"
+) -> Any:
+    """Thin wrapper: zieht die Starlette-App aus der MCPServer-Instanz und hängt
     den Middleware-Stack an (siehe `http_auth._attach_middlewares` für Details).
     """
-    return _attach_middlewares(mcp.streamable_http_app(), token, allowed_origins)
+    return _attach_middlewares(
+        mcp.streamable_http_app(transport_security=security, host=host),
+        token,
+        allowed_origins,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +221,8 @@ def main() -> None:
                 "Hostnamen, unter denen dieser Server erreichbar ist.",
                 args.host,
             )
-        mcp.settings.transport_security = security
-        app = build_http_app(token, allowed)
+        # mcp 2.x: transport_security is a per-app kwarg, not a setting.
+        app = build_http_app(token, allowed, security, args.host)
         import uvicorn
         uvicorn.run(app, host=args.host, port=args.port, log_config=None)
     else:
