@@ -25,6 +25,7 @@ API key required: Kostenloser Key via https://worldnewsapi.com/console/
 Set environment variable: WORLD_NEWS_API_KEY
 """
 
+import logging
 import os
 import sys
 from typing import Any
@@ -139,6 +140,43 @@ from news_monitor_mcp.tools.monitoring import (  # noqa: E402,F401
 )
 
 
+def build_transport_security(host: str, port: int, allowed_origins: frozenset[str]):
+    """Host/Origin-Allow-List fuer den HTTP-Transport (SEC-005, eingehend).
+
+    Ohne ``transport_security`` laesst das SDK den DNS-Rebinding-Schutz aus —
+    sein eigener Kommentar: "If not specified, disable DNS rebinding protection
+    by default for backwards compatibility". Ungesetzt heisst: keine Host- und
+    keine Origin-Pruefung.
+
+    Der Bearer-Token (http_auth) schuetzt bereits gegen unautorisierte Aufrufe;
+    das hier ist Defense in Depth auf Transport-Ebene und faengt Rebinding ab,
+    bevor ueberhaupt ein Handler laeuft.
+
+    Rueckgabe ``None``, wenn keine Allow-List ableitbar ist — Nicht-Loopback-Bind
+    ohne ``MCP_ALLOWED_HOSTS``. Der Server wird dann unter einem Service- oder
+    DNS-Namen erreicht, den dieser Prozess nicht kennt; eine geratene Liste
+    wuerde jede echte Anfrage mit HTTP 421 abweisen.
+    """
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    allowed = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    loopback = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+    if allowed:
+        hosts = set(allowed) | loopback
+    elif host in ("127.0.0.1", "localhost", "::1"):
+        hosts = loopback | {f"{host}:{port}"}
+    else:
+        return None
+
+    origins = {o for o in allowed_origins if o != "*"}
+    origins |= {f"http://{h}" for h in hosts}
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=sorted(hosts),
+        allowed_origins=sorted(origins),
+    )
+
+
 def build_http_app(token: str, allowed_origins: frozenset[str]) -> Any:
     """Thin wrapper: zieht die Starlette-App aus der FastMCP-Instanz und hängt
     den Middleware-Stack an (siehe `http_auth._attach_middlewares` für Details).
@@ -169,6 +207,15 @@ def main() -> None:
                   file=sys.stderr)
             sys.exit(2)
         allowed = _parse_allowed_origins(os.environ.get("MCP_ALLOWED_ORIGINS"))
+        security = build_transport_security(args.host, args.port, allowed)
+        if security is None:
+            logging.getLogger("news_monitor_mcp").warning(
+                "DNS-Rebinding-Schutz ist AUS: Bind auf %s ist nicht Loopback und "
+                "MCP_ALLOWED_HOSTS ist leer. Setze MCP_ALLOWED_HOSTS auf die "
+                "Hostnamen, unter denen dieser Server erreichbar ist.",
+                args.host,
+            )
+        mcp.settings.transport_security = security
         app = build_http_app(token, allowed)
         import uvicorn
         uvicorn.run(app, host=args.host, port=args.port, log_config=None)
