@@ -15,6 +15,8 @@ from typing import Optional
 import httpx
 from pydantic import SecretStr
 
+from . import __version__
+
 BASE_URL = "https://api.worldnewsapi.com"
 DEFAULT_TIMEOUT = 30.0
 MAX_RESULTS = 100
@@ -58,7 +60,7 @@ def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
         _client = httpx.AsyncClient(base_url=BASE_URL, timeout=DEFAULT_TIMEOUT,
-            headers={"User-Agent": "news-monitor-mcp/0.3.0"})
+            headers={"User-Agent": f"news-monitor-mcp/{__version__}"})
     return _client
 
 
