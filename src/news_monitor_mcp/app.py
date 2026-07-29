@@ -1,4 +1,4 @@
-"""FastMCP-Instanz + Singletons + Lifespan.
+"""MCPServer-Instanz + Singletons + Lifespan.
 
 Tools dekorieren `mcp` aus diesem Modul, statt aus `server.py`. Damit gibt es
 keinen zirkulaeren Import zwischen `server.py` (das die Tools importieren muss,
@@ -9,7 +9,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 import news_monitor_mcp.api_client as _api_client_module
 from news_monitor_mcp.alerts import AlertManager
@@ -22,7 +22,7 @@ _alert_manager = AlertManager()
 
 @asynccontextmanager
 async def server_lifespan(_server: Any):
-    """FastMCP-Lifespan: räumt prozessglobale Ressourcen beim Shutdown auf.
+    """MCPServer-Lifespan: räumt prozessglobale Ressourcen beim Shutdown auf.
 
     Konkret:
       * Startet einen Background-Cache-Sweep (Eviction abgelaufener Eintraege),
@@ -53,7 +53,7 @@ async def server_lifespan(_server: Any):
             logger.exception("httpx-Client konnte nicht sauber geschlossen werden")
 
 
-mcp = FastMCP(
+mcp = MCPServer(
     "news_monitor_mcp",
     instructions=(
         "News-Monitoring-Server mit 15 Tools via WorldNewsAPI. "

@@ -924,7 +924,7 @@ async def test_lifespan_resets_client_even_if_aclose_raises(monkeypatch, caplog)
 
 
 def test_fastmcp_instance_has_lifespan_attached():
-    """Sanity-Check: lifespan ist tatsaechlich am FastMCP-Server registriert."""
+    """Sanity-Check: lifespan ist tatsaechlich am MCPServer-Server registriert."""
     import news_monitor_mcp.server as srv
     assert srv.mcp.settings.lifespan is srv.server_lifespan
 
