@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-07-30
+
 ### Behoben
+
+- **User-Agent meldet wieder die tatsaechliche Paketversion.** Das auf PyPI
+  veroeffentlichte `0.3.4` sendete gegenueber jedem Upstream
+  `news-monitor-mcp/0.3.0` — der Versionsstring war im Code hartkodiert und beim
+  Bumpen liegengeblieben. Die Version kommt jetzt aus den Paket-Metadaten,
+  kann also nicht mehr getrennt vom Paket driften.
 
 - **`mcp` auf `<2` begrenzt.** `mcp` 2.0.0, veröffentlicht am 28.07.2026, hat
   `mcp.server.fastmcp` entfernt — genau das Modul, das dieser Server importiert.
