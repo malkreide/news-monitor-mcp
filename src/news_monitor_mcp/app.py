@@ -35,9 +35,7 @@ async def server_lifespan(_server: Any):
     sweep_seconds = _get_cache_sweep_seconds()
     sweep_task: Optional[asyncio.Task[None]] = None
     if sweep_seconds > 0:
-        sweep_task = asyncio.create_task(
-            _cache_sweep_loop(_cache, sweep_seconds), name="cache-sweep"
-        )
+        sweep_task = asyncio.create_task(_cache_sweep_loop(_cache, sweep_seconds), name="cache-sweep")
     try:
         yield {}
     finally:

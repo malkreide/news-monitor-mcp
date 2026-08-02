@@ -33,11 +33,9 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("authorization", "")
         scheme, _, presented = auth.partition(" ")
         if scheme.lower() != "bearer" or not presented:
-            return JSONResponse({"error": "unauthorized"}, status_code=401,
-                                headers={"www-authenticate": "Bearer"})
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"www-authenticate": "Bearer"})
         if not secrets.compare_digest(presented, self._token):
-            return JSONResponse({"error": "unauthorized"}, status_code=401,
-                                headers={"www-authenticate": "Bearer"})
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"www-authenticate": "Bearer"})
         return await call_next(request)
 
 
@@ -53,8 +51,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         finally:
             duration_ms = (time.monotonic() - t0) * 1000
-            logger.info("http_request method=%s path=%s dur_ms=%.1f",
-                        request.method, request.url.path, duration_ms)
+            logger.info("http_request method=%s path=%s dur_ms=%.1f", request.method, request.url.path, duration_ms)
             _request_id.reset(token)
         response.headers["x-request-id"] = rid
         return response

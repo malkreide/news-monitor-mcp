@@ -48,8 +48,7 @@ def _get_cache_max_per_type() -> int:
     try:
         value = int(raw)
     except ValueError:
-        logger.warning("MCP_CACHE_MAX_PER_TYPE=%r keine Zahl – fallback auf %d",
-                       raw, CACHE_MAX_PER_TYPE_DEFAULT)
+        logger.warning("MCP_CACHE_MAX_PER_TYPE=%r keine Zahl – fallback auf %d", raw, CACHE_MAX_PER_TYPE_DEFAULT)
         return CACHE_MAX_PER_TYPE_DEFAULT
     return max(value, 0)
 
@@ -62,8 +61,7 @@ def _get_cache_sweep_seconds() -> int:
     try:
         value = int(raw)
     except ValueError:
-        logger.warning("MCP_CACHE_SWEEP_SECONDS=%r keine Zahl – fallback auf %d s",
-                       raw, CACHE_SWEEP_SECONDS_DEFAULT)
+        logger.warning("MCP_CACHE_SWEEP_SECONDS=%r keine Zahl – fallback auf %d s", raw, CACHE_SWEEP_SECONDS_DEFAULT)
         return CACHE_SWEEP_SECONDS_DEFAULT
     return max(value, 0)
 
@@ -104,8 +102,7 @@ class NewsCache:
         self._hits = 0
         self._misses = 0
         self._evicted_by_cap = 0
-        self._max_per_type = (max_per_type if max_per_type is not None
-                              else _get_cache_max_per_type())
+        self._max_per_type = max_per_type if max_per_type is not None else _get_cache_max_per_type()
 
     def _make_key(self, tool_type: str, params: dict[str, Any]) -> str:
         # sha256 statt md5: kein FIPS-Block (RHEL/CentOS mit fips-mode) und keine

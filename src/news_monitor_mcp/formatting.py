@@ -28,11 +28,16 @@ class AlertConditionType(str, Enum):
 
 def _format_article(article: dict[str, Any], include_text: bool = False) -> dict[str, Any]:
     result = {
-        "id": article.get("id"), "titel": article.get("title"),
-        "zusammenfassung": article.get("summary", ""), "quelle_url": article.get("url"),
-        "bild_url": article.get("image"), "veroeffentlicht": article.get("publish_date"),
-        "autoren": article.get("authors", []), "kategorie": article.get("category"),
-        "sprache": article.get("language"), "quellland": article.get("source_country"),
+        "id": article.get("id"),
+        "titel": article.get("title"),
+        "zusammenfassung": article.get("summary", ""),
+        "quelle_url": article.get("url"),
+        "bild_url": article.get("image"),
+        "veroeffentlicht": article.get("publish_date"),
+        "autoren": article.get("authors", []),
+        "kategorie": article.get("category"),
+        "sprache": article.get("language"),
+        "quellland": article.get("source_country"),
         "sentiment": article.get("sentiment"),
     }
     if include_text:
@@ -41,14 +46,18 @@ def _format_article(article: dict[str, Any], include_text: bool = False) -> dict
 
 
 def _sentiment_label(score: Optional[float]) -> str:
-    if score is None: return "n/a"
-    if score > 0.3: return "positiv"
-    if score < -0.3: return "negativ"
+    if score is None:
+        return "n/a"
+    if score > 0.3:
+        return "positiv"
+    if score < -0.3:
+        return "negativ"
     return "neutral"
 
 
-def _format_articles_markdown(articles: list[dict[str, Any]],
-                               include_sentiment: bool = True, include_text: bool = False) -> str:
+def _format_articles_markdown(
+    articles: list[dict[str, Any]], include_sentiment: bool = True, include_text: bool = False
+) -> str:
     if not articles:
         return "Keine Artikel gefunden."
     lines = []

@@ -30,8 +30,9 @@ def _get_alert_retention_days() -> int:
     try:
         value = int(raw)
     except ValueError:
-        logger.warning("MCP_ALERT_RETENTION_DAYS=%r ist keine Zahl – fallback auf %d Tage",
-                       raw, ALERT_RETENTION_DAYS_DEFAULT)
+        logger.warning(
+            "MCP_ALERT_RETENTION_DAYS=%r ist keine Zahl – fallback auf %d Tage", raw, ALERT_RETENTION_DAYS_DEFAULT
+        )
         return ALERT_RETENTION_DAYS_DEFAULT
     return max(value, 0)
 
@@ -58,9 +59,7 @@ def _resolve_alerts_path() -> str:
 
     abspath = os.path.abspath(candidate)
     if abspath != os.path.normpath(abspath):
-        raise RuntimeError(
-            f"alerts path contains '..' after normalization: {candidate}"
-        )
+        raise RuntimeError(f"alerts path contains '..' after normalization: {candidate}")
 
     parent = os.path.dirname(abspath) or "."
     if os.path.lexists(parent):
@@ -160,18 +159,15 @@ class AlertManager:
     `last_triggered` (Privacy-Invariante per CH-DSG).
     """
 
-    def __init__(self, file_path: str = ALERTS_FILE,
-                 retention_days: Optional[int] = None) -> None:
+    def __init__(self, file_path: str = ALERTS_FILE, retention_days: Optional[int] = None) -> None:
         self._file = file_path
         self._alerts: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
-        self._retention_days = (retention_days if retention_days is not None
-                                else _get_alert_retention_days())
+        self._retention_days = retention_days if retention_days is not None else _get_alert_retention_days()
         self._load()
         pruned = self._prune_old_alerts()
         if pruned:
-            logger.info("Alert-Retention: %d Alerts aelter als %d Tage geloescht",
-                        pruned, self._retention_days)
+            logger.info("Alert-Retention: %d Alerts aelter als %d Tage geloescht", pruned, self._retention_days)
             self._save()
         _ensure_secure_perms(self._file)
 
@@ -215,9 +211,14 @@ class AlertManager:
     def create(self, data: dict[str, Any]) -> str:
         with self._lock:
             alert_id = f"alert_{uuid.uuid4().hex[:8]}"
-            self._alerts[alert_id] = {**data, "id": alert_id,
+            self._alerts[alert_id] = {
+                **data,
+                "id": alert_id,
                 "created_at": datetime.now().isoformat(),
-                "last_checked": None, "last_triggered": None, "trigger_count": 0}
+                "last_checked": None,
+                "last_triggered": None,
+                "trigger_count": 0,
+            }
             self._save()
             return alert_id
 
@@ -247,8 +248,9 @@ class AlertManager:
                     self._alerts[alert_id]["trigger_count"] = self._alerts[alert_id].get("trigger_count", 0) + 1
                 self._save()
 
-    def evaluate_condition(self, alert: dict[str, Any], articles: list[dict[str, Any]],
-                           avg_sentiment: Optional[float]) -> tuple[bool, str]:
+    def evaluate_condition(
+        self, alert: dict[str, Any], articles: list[dict[str, Any]], avg_sentiment: Optional[float]
+    ) -> tuple[bool, str]:
         condition = alert.get("condition_type", "")
         threshold = alert.get("threshold", 0.0)
         keyword = (alert.get("keyword") or "").lower()
@@ -268,8 +270,11 @@ class AlertManager:
                 return True, f"{count} Artikel > Schwellenwert {int(threshold)}"
             return False, f"{count} Artikel <= Schwellenwert {int(threshold)}"
         if condition == "keyword_found":
-            matches = [a for a in articles if keyword in (a.get("title") or "").lower()
-                       or keyword in (a.get("summary") or "").lower()]
+            matches = [
+                a
+                for a in articles
+                if keyword in (a.get("title") or "").lower() or keyword in (a.get("summary") or "").lower()
+            ]
             if matches:
                 return True, f"Schluesselwort <<{keyword}>> in {len(matches)} Artikel(n) gefunden"
             return False, f"Schluesselwort <<{keyword}>> nicht gefunden"

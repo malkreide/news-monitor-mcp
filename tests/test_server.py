@@ -1,31 +1,31 @@
 """Tests für den News Monitor MCP Server."""
 
+import io
+import json as _json
+import logging as _logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from starlette.applications import Starlette
+from starlette.responses import PlainTextResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
 
 from news_monitor_mcp.server import (
-    GeoNewsInput,
     MediaBriefingInput,
     ResponseFormat,
     SearchNewsInput,
-    SearchSourcesInput,
     SentimentMonitorInput,
-    SortOrder,
     TopNewsInput,
     TrendRadarInput,
     _format_article,
     _no_key_message,
     _sentiment_label,
-    news_geo_search,
-    news_media_briefing,
     news_search,
-    news_search_sources,
     news_sentiment_monitor,
     news_top_headlines,
     news_trend_radar,
 )
-
 
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen Tests
@@ -219,9 +219,7 @@ async def test_news_search_mock():
     mock_response.raise_for_status = MagicMock()
 
     with patch.dict("os.environ", {"WORLD_NEWS_API_KEY": "test-key-123"}):
-        with patch(
-            "news_monitor_mcp.tools.monitoring._get_client"
-        ) as mock_get_client:
+        with patch("news_monitor_mcp.tools.monitoring._get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_client
@@ -353,14 +351,18 @@ async def test_live_sentiment_ki_bildung():
 # Cache-Tests
 # ---------------------------------------------------------------------------
 
+
 def test_cache_miss_returns_none():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     result = cache.get("search", {"q": "test"})
     assert result is None
 
+
 def test_cache_set_and_get():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     data = {"news": [{"title": "Test"}], "available": 1}
     cache.set("search", {"q": "test"}, data)
@@ -368,24 +370,30 @@ def test_cache_set_and_get():
     assert result is not None
     assert result["news"][0]["title"] == "Test"
 
+
 def test_cache_different_params_different_keys():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     cache.set("search", {"q": "test1"}, {"data": "A"})
     cache.set("search", {"q": "test2"}, {"data": "B"})
     assert cache.get("search", {"q": "test1"})["data"] == "A"
     assert cache.get("search", {"q": "test2"})["data"] == "B"
 
+
 def test_cache_stats_initial():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     stats = cache.stats()
     assert stats["gesamt_eintraege"] == 0
     assert stats["hits"] == 0
     assert stats["misses"] == 0
 
+
 def test_cache_stats_after_hit():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     cache.set("search", {"q": "test"}, {"data": "x"})
     cache.get("search", {"q": "test"})  # hit
@@ -395,8 +403,10 @@ def test_cache_stats_after_hit():
     assert stats["misses"] == 1
     assert stats["api_calls_gespart"] == 1
 
+
 def test_cache_clear_all():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
     cache.set("headlines", {"sc": "ch"}, {"d": 2})
@@ -404,8 +414,10 @@ def test_cache_clear_all():
     assert count == 2
     assert cache.stats()["gesamt_eintraege"] == 0
 
+
 def test_cache_clear_by_type():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
     cache.set("headlines", {"sc": "ch"}, {"d": 2})
@@ -414,8 +426,10 @@ def test_cache_clear_by_type():
     assert cache.get("search", {"q": "a"}) is None
     assert cache.get("headlines", {"sc": "ch"}) is not None
 
+
 def test_cache_hit_rate_display():
     from news_monitor_mcp.server import NewsCache
+
     cache = NewsCache()
     cache.set("search", {"q": "test"}, {"data": "x"})
     cache.get("search", {"q": "test"})  # hit
@@ -428,29 +442,53 @@ def test_cache_hit_rate_display():
 # AlertManager-Tests
 # ---------------------------------------------------------------------------
 
+
 def test_alert_manager_create_and_list(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    alert_id = mgr.create({"name": "Test Alert", "entity": "Schulamt Zürich",
-        "language": "de", "source_country": "ch", "days_back": 7,
-        "condition_type": "sentiment_below", "threshold": -0.2, "keyword": None})
+    alert_id = mgr.create(
+        {
+            "name": "Test Alert",
+            "entity": "Schulamt Zürich",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "sentiment_below",
+            "threshold": -0.2,
+            "keyword": None,
+        }
+    )
     assert alert_id.startswith("alert_")
     alerts = mgr.list_all()
     assert len(alerts) == 1
     assert alerts[0]["name"] == "Test Alert"
 
+
 def test_alert_manager_delete(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    alert_id = mgr.create({"name": "Delete Me", "entity": "test",
-        "language": "de", "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 50.0, "keyword": None})
+    alert_id = mgr.create(
+        {
+            "name": "Delete Me",
+            "entity": "test",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 50.0,
+            "keyword": None,
+        }
+    )
     assert mgr.delete(alert_id) is True
     assert len(mgr.list_all()) == 0
     assert mgr.delete("nonexistent") is False
 
+
 def test_alert_evaluate_sentiment_below(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
     alert = {"condition_type": "sentiment_below", "threshold": -0.2, "keyword": None}
     triggered, reason = mgr.evaluate_condition(alert, [], avg_sentiment=-0.5)
@@ -458,8 +496,10 @@ def test_alert_evaluate_sentiment_below(tmp_path):
     triggered, reason = mgr.evaluate_condition(alert, [], avg_sentiment=0.1)
     assert triggered is False
 
+
 def test_alert_evaluate_sentiment_above(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
     alert = {"condition_type": "sentiment_above", "threshold": 0.5, "keyword": None}
     triggered, _ = mgr.evaluate_condition(alert, [], avg_sentiment=0.8)
@@ -467,8 +507,10 @@ def test_alert_evaluate_sentiment_above(tmp_path):
     triggered, _ = mgr.evaluate_condition(alert, [], avg_sentiment=0.2)
     assert triggered is False
 
+
 def test_alert_evaluate_volume_above(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
     alert = {"condition_type": "volume_above", "threshold": 5.0, "keyword": None}
     articles = [{"title": f"Art {i}"} for i in range(10)]
@@ -477,8 +519,10 @@ def test_alert_evaluate_volume_above(tmp_path):
     triggered, _ = mgr.evaluate_condition(alert, articles[:3], avg_sentiment=None)
     assert triggered is False
 
+
 def test_alert_evaluate_keyword_found(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
     alert = {"condition_type": "keyword_found", "threshold": None, "keyword": "streik"}
     articles = [{"title": "Lehrerstreik in Zürich", "summary": "..."}]
@@ -488,12 +532,23 @@ def test_alert_evaluate_keyword_found(tmp_path):
     triggered, _ = mgr.evaluate_condition(alert, articles_no_match, avg_sentiment=None)
     assert triggered is False
 
+
 def test_alert_mark_checked_updates_count(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    alert_id = mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7, "condition_type": "volume_above",
-        "threshold": 5.0, "keyword": None})
+    alert_id = mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 5.0,
+            "keyword": None,
+        }
+    )
     mgr.mark_checked(alert_id, triggered=True)
     alert = mgr.get(alert_id)
     assert alert["trigger_count"] == 1
@@ -505,20 +560,17 @@ def test_alert_mark_checked_updates_count(tmp_path):
 # HTTP-Auth-Middleware-Tests
 # ---------------------------------------------------------------------------
 
-from starlette.applications import Starlette
-from starlette.responses import PlainTextResponse
-from starlette.routing import Route
-from starlette.testclient import TestClient
-
 
 def _stub_app() -> Starlette:
     async def hello(_request):
         return PlainTextResponse("ok")
+
     return Starlette(routes=[Route("/mcp", hello, methods=["GET", "POST"])])
 
 
 def test_bearer_middleware_rejects_missing_header():
     from news_monitor_mcp.server import BearerAuthMiddleware
+
     app = _stub_app()
     app.add_middleware(BearerAuthMiddleware, token="secret-token")
     client = TestClient(app)
@@ -529,6 +581,7 @@ def test_bearer_middleware_rejects_missing_header():
 
 def test_bearer_middleware_rejects_wrong_scheme():
     from news_monitor_mcp.server import BearerAuthMiddleware
+
     app = _stub_app()
     app.add_middleware(BearerAuthMiddleware, token="secret-token")
     client = TestClient(app)
@@ -538,6 +591,7 @@ def test_bearer_middleware_rejects_wrong_scheme():
 
 def test_bearer_middleware_rejects_wrong_token():
     from news_monitor_mcp.server import BearerAuthMiddleware
+
     app = _stub_app()
     app.add_middleware(BearerAuthMiddleware, token="secret-token")
     client = TestClient(app)
@@ -547,6 +601,7 @@ def test_bearer_middleware_rejects_wrong_token():
 
 def test_bearer_middleware_accepts_correct_token():
     from news_monitor_mcp.server import BearerAuthMiddleware
+
     app = _stub_app()
     app.add_middleware(BearerAuthMiddleware, token="secret-token")
     client = TestClient(app)
@@ -557,9 +612,9 @@ def test_bearer_middleware_accepts_correct_token():
 
 def test_origin_allowlist_passes_when_no_origin_header():
     from news_monitor_mcp.server import OriginAllowlistMiddleware
+
     app = _stub_app()
-    app.add_middleware(OriginAllowlistMiddleware,
-                       allowed_origins=frozenset({"https://claude.ai"}))
+    app.add_middleware(OriginAllowlistMiddleware, allowed_origins=frozenset({"https://claude.ai"}))
     client = TestClient(app)
     r = client.get("/mcp")
     assert r.status_code == 200
@@ -567,9 +622,9 @@ def test_origin_allowlist_passes_when_no_origin_header():
 
 def test_origin_allowlist_blocks_unknown_origin():
     from news_monitor_mcp.server import OriginAllowlistMiddleware
+
     app = _stub_app()
-    app.add_middleware(OriginAllowlistMiddleware,
-                       allowed_origins=frozenset({"https://claude.ai"}))
+    app.add_middleware(OriginAllowlistMiddleware, allowed_origins=frozenset({"https://claude.ai"}))
     client = TestClient(app)
     r = client.get("/mcp", headers={"Origin": "https://evil.example"})
     assert r.status_code == 403
@@ -577,9 +632,9 @@ def test_origin_allowlist_blocks_unknown_origin():
 
 def test_origin_allowlist_allows_known_origin():
     from news_monitor_mcp.server import OriginAllowlistMiddleware
+
     app = _stub_app()
-    app.add_middleware(OriginAllowlistMiddleware,
-                       allowed_origins=frozenset({"https://claude.ai"}))
+    app.add_middleware(OriginAllowlistMiddleware, allowed_origins=frozenset({"https://claude.ai"}))
     client = TestClient(app)
     r = client.get("/mcp", headers={"Origin": "https://claude.ai"})
     assert r.status_code == 200
@@ -587,14 +642,15 @@ def test_origin_allowlist_allows_known_origin():
 
 def test_parse_allowed_origins_handles_csv_and_whitespace():
     from news_monitor_mcp.server import _parse_allowed_origins
+
     assert _parse_allowed_origins(None) == frozenset()
     assert _parse_allowed_origins("") == frozenset()
-    assert _parse_allowed_origins("https://a, https://b ,, ") == frozenset(
-        {"https://a", "https://b"})
+    assert _parse_allowed_origins("https://a, https://b ,, ") == frozenset({"https://a", "https://b"})
 
 
 def test_build_http_app_layers_middlewares():
     from news_monitor_mcp.server import build_http_app
+
     app = build_http_app("secret", frozenset({"https://claude.ai"}))
     middleware_classes = [m.cls.__name__ for m in app.user_middleware]
     assert "BearerAuthMiddleware" in middleware_classes
@@ -605,10 +661,6 @@ def test_build_http_app_layers_middlewares():
 # ---------------------------------------------------------------------------
 # Structured-Logging-Tests
 # ---------------------------------------------------------------------------
-
-import io
-import json as _json
-import logging as _logging
 
 
 def _capture_logs(level: str = "INFO") -> tuple[_logging.Logger, io.StringIO]:
@@ -634,6 +686,7 @@ def _capture_logs(level: str = "INFO") -> tuple[_logging.Logger, io.StringIO]:
         root.setLevel(saved[0])
         for h in saved[1]:
             root.addHandler(h)
+
     return root, buf, restore  # type: ignore[return-value]
 
 
@@ -641,6 +694,7 @@ def test_json_formatter_emits_valid_json_with_required_fields():
     root, buf, restore = _capture_logs()
     try:
         from news_monitor_mcp.server import logger as srv_logger
+
         srv_logger.info("hello")
     finally:
         restore()
@@ -654,7 +708,9 @@ def test_json_formatter_emits_valid_json_with_required_fields():
 
 
 def test_request_id_contextvar_appears_in_log():
-    from news_monitor_mcp.server import _request_id, logger as srv_logger
+    from news_monitor_mcp.server import _request_id
+    from news_monitor_mcp.server import logger as srv_logger
+
     root, buf, restore = _capture_logs()
     try:
         tok = _request_id.set("abc123def456")
@@ -670,6 +726,7 @@ def test_request_id_contextvar_appears_in_log():
 
 def test_redaction_masks_api_key_in_url():
     from news_monitor_mcp.server import logger as srv_logger
+
     root, buf, restore = _capture_logs()
     try:
         srv_logger.info("calling https://api.worldnewsapi.com/search-news?api-key=SECRETXYZ&text=foo")
@@ -682,6 +739,7 @@ def test_redaction_masks_api_key_in_url():
 
 def test_redaction_masks_authorization_bearer():
     from news_monitor_mcp.server import logger as srv_logger
+
     root, buf, restore = _capture_logs()
     try:
         srv_logger.info("header authorization: Bearer SUPERSECRETTOKEN")
@@ -693,7 +751,9 @@ def test_redaction_masks_authorization_bearer():
 
 
 def test_add_redaction_pattern_extends_pipeline():
-    from news_monitor_mcp.server import add_redaction_pattern, _redaction_patterns, logger as srv_logger
+    from news_monitor_mcp.server import _redaction_patterns, add_redaction_pattern
+    from news_monitor_mcp.server import logger as srv_logger
+
     saved = list(_redaction_patterns)
     try:
         add_redaction_pattern(r"PIN-\d{4}", "PIN-****")
@@ -711,6 +771,7 @@ def test_add_redaction_pattern_extends_pipeline():
 
 def test_configure_logging_is_idempotent():
     from news_monitor_mcp.server import configure_logging
+
     configure_logging("INFO")
     handlers_first = list(_logging.getLogger().handlers)
     configure_logging("DEBUG")
@@ -721,6 +782,7 @@ def test_configure_logging_is_idempotent():
 
 def test_configure_logging_silences_httpx_below_warning():
     from news_monitor_mcp.server import configure_logging
+
     configure_logging("DEBUG")
     assert _logging.getLogger("httpx").getEffectiveLevel() >= _logging.WARNING
     assert _logging.getLogger("httpcore").getEffectiveLevel() >= _logging.WARNING
@@ -728,10 +790,11 @@ def test_configure_logging_silences_httpx_below_warning():
 
 @pytest.mark.asyncio
 async def test_request_id_middleware_sets_header_and_contextvar():
-    from news_monitor_mcp.server import RequestIdMiddleware, _request_id
     from starlette.applications import Starlette
     from starlette.responses import PlainTextResponse
     from starlette.routing import Route
+
+    from news_monitor_mcp.server import RequestIdMiddleware, _request_id
 
     seen = {}
 
@@ -751,10 +814,11 @@ async def test_request_id_middleware_sets_header_and_contextvar():
 
 @pytest.mark.asyncio
 async def test_request_id_middleware_preserves_incoming_id():
-    from news_monitor_mcp.server import RequestIdMiddleware
     from starlette.applications import Starlette
     from starlette.responses import PlainTextResponse
     from starlette.routing import Route
+
+    from news_monitor_mcp.server import RequestIdMiddleware
 
     app = Starlette(routes=[Route("/mcp", lambda r: PlainTextResponse("ok"))])
     app.add_middleware(RequestIdMiddleware)
@@ -767,8 +831,10 @@ async def test_request_id_middleware_preserves_incoming_id():
 # SEC-API-KEY-HANDLING Tests
 # ---------------------------------------------------------------------------
 
+
 def test_get_api_key_returns_secretstr_when_set(monkeypatch):
     from pydantic import SecretStr
+
     from news_monitor_mcp.server import _get_api_key
 
     monkeypatch.setenv("WORLD_NEWS_API_KEY", "my-super-secret-key")
@@ -794,6 +860,7 @@ def test_secretstr_str_repr_does_not_leak():
 
 def test_auth_headers_returns_x_api_key():
     from pydantic import SecretStr
+
     from news_monitor_mcp.server import _auth_headers
 
     headers = _auth_headers(SecretStr("k-123"))
@@ -808,8 +875,10 @@ async def test_news_search_sends_x_api_key_header_not_url_param():
     class _FakeResponse:
         def __init__(self):
             self.status_code = 200
+
         def raise_for_status(self):
             pass
+
         def json(self):
             return {"news": [], "available": 0}
 
@@ -847,8 +916,9 @@ def test_handle_api_error_does_not_echo_raw_exception_string():
 
 
 def test_handle_api_error_maps_known_status_codes():
-    from news_monitor_mcp.server import _handle_api_error
     import httpx
+
+    from news_monitor_mcp.server import _handle_api_error
 
     def _make(status):
         req = httpx.Request("GET", "https://example.invalid/x?api-key=SHOULDNOTAPPEAR")
@@ -867,6 +937,7 @@ def test_handle_api_error_maps_known_status_codes():
 # ---------------------------------------------------------------------------
 # SDK-LIFESPAN Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_lifespan_closes_lazy_client():
@@ -912,6 +983,7 @@ async def test_lifespan_resets_client_even_if_aclose_raises(monkeypatch, caplog)
 
     class _BrokenClient:
         is_closed = False
+
         async def aclose(self):
             raise RuntimeError("simulated teardown failure")
 
@@ -926,12 +998,14 @@ async def test_lifespan_resets_client_even_if_aclose_raises(monkeypatch, caplog)
 def test_fastmcp_instance_has_lifespan_attached():
     """Sanity-Check: lifespan ist tatsaechlich am MCPServer-Server registriert."""
     import news_monitor_mcp.server as srv
+
     assert srv.mcp.settings.lifespan is srv.server_lifespan
 
 
 # ---------------------------------------------------------------------------
 # ARCH-CONCURRENCY Tests
 # ---------------------------------------------------------------------------
+
 
 def test_atomic_write_does_not_leave_tmp_file(tmp_path):
     from news_monitor_mcp.server import _atomic_write_json
@@ -976,10 +1050,20 @@ def test_atomic_write_replaces_existing_file(tmp_path):
 
 def test_alert_manager_get_returns_defensive_copy(tmp_path):
     from news_monitor_mcp.server import AlertManager
+
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    alert_id = mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 5.0, "keyword": None})
+    alert_id = mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 5.0,
+            "keyword": None,
+        }
+    )
     snapshot = mgr.get(alert_id)
     snapshot["name"] = "MUTATED EXTERNALLY"
     # Internal state must NOT reflect the external mutation
@@ -990,6 +1074,7 @@ def test_alert_manager_get_returns_defensive_copy(tmp_path):
 def test_alert_manager_concurrent_creates_from_threads(tmp_path):
     """100 parallel create() Aufrufe aus Threads -> alle 100 Alerts persistiert."""
     import threading as _th
+
     from news_monitor_mcp.server import AlertManager
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
@@ -997,9 +1082,18 @@ def test_alert_manager_concurrent_creates_from_threads(tmp_path):
 
     def _worker(i: int) -> None:
         try:
-            mgr.create({"name": f"alert-{i}", "entity": f"e-{i}", "language": "de",
-                "source_country": "ch", "days_back": 7,
-                "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+            mgr.create(
+                {
+                    "name": f"alert-{i}",
+                    "entity": f"e-{i}",
+                    "language": "de",
+                    "source_country": "ch",
+                    "days_back": 7,
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                }
+            )
         except BaseException as e:  # noqa: BLE001
             errors.append(e)
 
@@ -1018,12 +1112,22 @@ def test_alert_manager_concurrent_creates_from_threads(tmp_path):
 
 def test_alert_manager_concurrent_mark_checked_increments_correctly(tmp_path):
     import threading as _th
+
     from news_monitor_mcp.server import AlertManager
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+    aid = mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 1.0,
+            "keyword": None,
+        }
+    )
 
     def _worker() -> None:
         mgr.mark_checked(aid, triggered=True)
@@ -1040,6 +1144,7 @@ def test_alert_manager_concurrent_mark_checked_increments_correctly(tmp_path):
 def test_file_lock_is_noop_when_fcntl_unavailable(tmp_path, monkeypatch):
     """Auf Plattformen ohne fcntl darf _file_lock nicht crashen."""
     import news_monitor_mcp.server as srv
+
     monkeypatch.setattr(srv, "_fcntl", None)
     with srv._file_lock(str(tmp_path / "alerts.json")):
         pass  # should be a no-op contextmanager
@@ -1048,10 +1153,12 @@ def test_file_lock_is_noop_when_fcntl_unavailable(tmp_path, monkeypatch):
 def test_file_lock_creates_sidecar_and_serializes(tmp_path):
     """fcntl-Pfad: Lock-File wird erzeugt; zwei Locks im selben Prozess sind seriell."""
     import news_monitor_mcp.server as srv
+
     if srv._fcntl is None:
         pytest.skip("fcntl not available on this platform")
 
     import os as _os
+
     target = str(tmp_path / "alerts.json")
     with srv._file_lock(target):
         assert _os.path.exists(target + ".lock")
@@ -1064,9 +1171,11 @@ def test_file_lock_creates_sidecar_and_serializes(tmp_path):
 # SEC-ALERTS-PATH Tests
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_alerts_path_default(monkeypatch):
     import os as _os
-    from news_monitor_mcp.server import _resolve_alerts_path, ALERTS_DIR_DEFAULT
+
+    from news_monitor_mcp.server import ALERTS_DIR_DEFAULT, _resolve_alerts_path
 
     monkeypatch.delenv("NEWS_MONITOR_ALERTS_FILE", raising=False)
     monkeypatch.delenv("NEWS_MONITOR_ALERTS_DIR", raising=False)
@@ -1076,6 +1185,7 @@ def test_resolve_alerts_path_default(monkeypatch):
 
 def test_resolve_alerts_path_honors_dir_env(monkeypatch, tmp_path):
     import os as _os
+
     from news_monitor_mcp.server import _resolve_alerts_path
 
     monkeypatch.delenv("NEWS_MONITOR_ALERTS_FILE", raising=False)
@@ -1115,6 +1225,7 @@ def test_resolve_alerts_path_rejects_dotdot_segments(monkeypatch, tmp_path):
 
 def test_resolve_alerts_path_refuses_symlinked_parent(monkeypatch, tmp_path):
     import os as _os
+
     from news_monitor_mcp.server import _resolve_alerts_path
 
     real_dir = tmp_path / "real"
@@ -1131,6 +1242,7 @@ def test_resolve_alerts_path_refuses_symlinked_parent(monkeypatch, tmp_path):
 def test_ensure_secure_perms_sets_0o600_on_file(tmp_path):
     import os as _os
     import stat as _stat
+
     from news_monitor_mcp.server import _ensure_secure_perms
 
     target = tmp_path / "alerts.json"
@@ -1146,6 +1258,7 @@ def test_ensure_secure_perms_sets_0o600_on_file(tmp_path):
 def test_ensure_secure_perms_sets_0o700_on_parent(tmp_path):
     import os as _os
     import stat as _stat
+
     from news_monitor_mcp.server import _ensure_secure_perms
 
     parent = tmp_path / "alerts-dir"
@@ -1163,6 +1276,7 @@ def test_ensure_secure_perms_sets_0o700_on_parent(tmp_path):
 # ---------------------------------------------------------------------------
 # SCALE-STATEFUL Tests (LRU cap + background sweep)
 # ---------------------------------------------------------------------------
+
 
 def test_cache_get_promotes_to_most_recently_used():
     """Erfolgreicher get() schiebt den Key ans Ende der OrderedDict (LRU)."""
@@ -1263,8 +1377,10 @@ def test_cache_update_existing_key_does_not_evict():
 
 def test_get_cache_max_per_type_env_parsing(monkeypatch):
     from news_monitor_mcp.server import (
-        _get_cache_max_per_type, CACHE_MAX_PER_TYPE_DEFAULT,
+        CACHE_MAX_PER_TYPE_DEFAULT,
+        _get_cache_max_per_type,
     )
+
     monkeypatch.delenv("MCP_CACHE_MAX_PER_TYPE", raising=False)
     assert _get_cache_max_per_type() == CACHE_MAX_PER_TYPE_DEFAULT
 
@@ -1283,8 +1399,10 @@ def test_get_cache_max_per_type_env_parsing(monkeypatch):
 
 def test_get_cache_sweep_seconds_env_parsing(monkeypatch):
     from news_monitor_mcp.server import (
-        _get_cache_sweep_seconds, CACHE_SWEEP_SECONDS_DEFAULT,
+        CACHE_SWEEP_SECONDS_DEFAULT,
+        _get_cache_sweep_seconds,
     )
+
     monkeypatch.delenv("MCP_CACHE_SWEEP_SECONDS", raising=False)
     assert _get_cache_sweep_seconds() == CACHE_SWEEP_SECONDS_DEFAULT
 
@@ -1302,6 +1420,7 @@ def test_get_cache_sweep_seconds_env_parsing(monkeypatch):
 async def test_cache_sweep_loop_calls_evict_expired():
     """Der Background-Loop ruft tatsaechlich evict_expired() periodisch auf."""
     import asyncio as _asyncio
+
     from news_monitor_mcp.server import _cache_sweep_loop
 
     calls = {"n": 0}
@@ -1326,9 +1445,10 @@ async def test_cache_sweep_loop_calls_evict_expired():
 async def test_server_lifespan_starts_and_stops_sweep_task(monkeypatch):
     """server_lifespan startet/stoppt den Cache-Sweep ohne Crash."""
     import asyncio as _asyncio
-    import news_monitor_mcp.server as srv
 
     import news_monitor_mcp.api_client as api
+    import news_monitor_mcp.server as srv
+
     monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "1")
     await api.close_client()
 
@@ -1344,9 +1464,10 @@ async def test_server_lifespan_starts_and_stops_sweep_task(monkeypatch):
 async def test_server_lifespan_sweep_zero_disables_task(monkeypatch):
     """MCP_CACHE_SWEEP_SECONDS=0 startet keinen Background-Task."""
     import asyncio as _asyncio
-    import news_monitor_mcp.server as srv
 
     import news_monitor_mcp.api_client as api
+    import news_monitor_mcp.server as srv
+
     monkeypatch.setenv("MCP_CACHE_SWEEP_SECONDS", "0")
     await api.close_client()
 
@@ -1370,32 +1491,38 @@ def test_news_cache_satisfies_cache_backend_protocol():
 # CH-DSG Retention Tests
 # ---------------------------------------------------------------------------
 
+
 def test_get_alert_retention_days_default(monkeypatch):
-    from news_monitor_mcp.server import _get_alert_retention_days, ALERT_RETENTION_DAYS_DEFAULT
+    from news_monitor_mcp.server import ALERT_RETENTION_DAYS_DEFAULT, _get_alert_retention_days
+
     monkeypatch.delenv("MCP_ALERT_RETENTION_DAYS", raising=False)
     assert _get_alert_retention_days() == ALERT_RETENTION_DAYS_DEFAULT
 
 
 def test_get_alert_retention_days_honors_env(monkeypatch):
     from news_monitor_mcp.server import _get_alert_retention_days
+
     monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "30")
     assert _get_alert_retention_days() == 30
 
 
 def test_get_alert_retention_days_accepts_zero_to_disable(monkeypatch):
     from news_monitor_mcp.server import _get_alert_retention_days
+
     monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "0")
     assert _get_alert_retention_days() == 0
 
 
 def test_get_alert_retention_days_clamps_negative(monkeypatch):
     from news_monitor_mcp.server import _get_alert_retention_days
+
     monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "-5")
     assert _get_alert_retention_days() == 0
 
 
 def test_get_alert_retention_days_falls_back_on_garbage(monkeypatch):
-    from news_monitor_mcp.server import _get_alert_retention_days, ALERT_RETENTION_DAYS_DEFAULT
+    from news_monitor_mcp.server import ALERT_RETENTION_DAYS_DEFAULT, _get_alert_retention_days
+
     monkeypatch.setenv("MCP_ALERT_RETENTION_DAYS", "notanumber")
     assert _get_alert_retention_days() == ALERT_RETENTION_DAYS_DEFAULT
 
@@ -1404,23 +1531,49 @@ def test_alert_manager_prunes_old_alerts_on_load(tmp_path):
     """Alerts mit created_at older als retention_days werden beim __init__ entfernt."""
     import json as _json
     from datetime import datetime, timedelta
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
     old_ts = (datetime.now() - timedelta(days=120)).isoformat()
     fresh_ts = (datetime.now() - timedelta(days=10)).isoformat()
-    target.write_text(_json.dumps({
-        "alert_old": {"id": "alert_old", "name": "stale", "created_at": old_ts,
-                      "entity": "x", "language": "de", "days_back": 7,
-                      "source_country": "ch", "condition_type": "volume_above",
-                      "threshold": 1.0, "keyword": None,
-                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
-        "alert_new": {"id": "alert_new", "name": "fresh", "created_at": fresh_ts,
-                      "entity": "y", "language": "de", "days_back": 7,
-                      "source_country": "ch", "condition_type": "volume_above",
-                      "threshold": 1.0, "keyword": None,
-                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
-    }), encoding="utf-8")
+    target.write_text(
+        _json.dumps(
+            {
+                "alert_old": {
+                    "id": "alert_old",
+                    "name": "stale",
+                    "created_at": old_ts,
+                    "entity": "x",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+                "alert_new": {
+                    "id": "alert_new",
+                    "name": "fresh",
+                    "created_at": fresh_ts,
+                    "entity": "y",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     mgr = AlertManager(file_path=str(target), retention_days=90)
     ids = {a["id"] for a in mgr.list_all()}
@@ -1432,17 +1585,33 @@ def test_alert_manager_persists_pruned_state_to_disk(tmp_path):
     """Pruning beim Start muss auch ins File geschrieben werden."""
     import json as _json
     from datetime import datetime, timedelta
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
     old_ts = (datetime.now() - timedelta(days=120)).isoformat()
-    target.write_text(_json.dumps({
-        "alert_old": {"id": "alert_old", "name": "stale", "created_at": old_ts,
-                      "entity": "x", "language": "de", "days_back": 7,
-                      "source_country": "ch", "condition_type": "volume_above",
-                      "threshold": 1.0, "keyword": None,
-                      "last_checked": None, "last_triggered": None, "trigger_count": 0},
-    }), encoding="utf-8")
+    target.write_text(
+        _json.dumps(
+            {
+                "alert_old": {
+                    "id": "alert_old",
+                    "name": "stale",
+                    "created_at": old_ts,
+                    "entity": "x",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     AlertManager(file_path=str(target), retention_days=90)
 
@@ -1453,17 +1622,33 @@ def test_alert_manager_persists_pruned_state_to_disk(tmp_path):
 def test_alert_manager_retention_zero_disables_pruning(tmp_path):
     import json as _json
     from datetime import datetime, timedelta
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
     old_ts = (datetime.now() - timedelta(days=999)).isoformat()
-    target.write_text(_json.dumps({
-        "alert_ancient": {"id": "alert_ancient", "name": "ancient", "created_at": old_ts,
-                          "entity": "x", "language": "de", "days_back": 7,
-                          "source_country": "ch", "condition_type": "volume_above",
-                          "threshold": 1.0, "keyword": None,
-                          "last_checked": None, "last_triggered": None, "trigger_count": 0},
-    }), encoding="utf-8")
+    target.write_text(
+        _json.dumps(
+            {
+                "alert_ancient": {
+                    "id": "alert_ancient",
+                    "name": "ancient",
+                    "created_at": old_ts,
+                    "entity": "x",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     mgr = AlertManager(file_path=str(target), retention_days=0)
     assert len(mgr.list_all()) == 1
@@ -1472,16 +1657,31 @@ def test_alert_manager_retention_zero_disables_pruning(tmp_path):
 def test_alert_manager_keeps_alerts_without_created_at(tmp_path):
     """Legacy-Alerts ohne created_at-Feld werden NICHT geloescht."""
     import json as _json
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
-    target.write_text(_json.dumps({
-        "alert_legacy": {"id": "alert_legacy", "name": "legacy",
-                         "entity": "x", "language": "de", "days_back": 7,
-                         "source_country": "ch", "condition_type": "volume_above",
-                         "threshold": 1.0, "keyword": None,
-                         "last_checked": None, "last_triggered": None, "trigger_count": 0},
-    }), encoding="utf-8")
+    target.write_text(
+        _json.dumps(
+            {
+                "alert_legacy": {
+                    "id": "alert_legacy",
+                    "name": "legacy",
+                    "entity": "x",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     mgr = AlertManager(file_path=str(target), retention_days=1)
     assert len(mgr.list_all()) == 1
@@ -1490,17 +1690,32 @@ def test_alert_manager_keeps_alerts_without_created_at(tmp_path):
 def test_alert_manager_keeps_alerts_with_invalid_timestamp(tmp_path):
     """Korrupte created_at-Werte lassen den Alert in Ruhe (defensive)."""
     import json as _json
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
-    target.write_text(_json.dumps({
-        "alert_corrupt": {"id": "alert_corrupt", "name": "corrupt",
-                          "created_at": "not-a-timestamp",
-                          "entity": "x", "language": "de", "days_back": 7,
-                          "source_country": "ch", "condition_type": "volume_above",
-                          "threshold": 1.0, "keyword": None,
-                          "last_checked": None, "last_triggered": None, "trigger_count": 0},
-    }), encoding="utf-8")
+    target.write_text(
+        _json.dumps(
+            {
+                "alert_corrupt": {
+                    "id": "alert_corrupt",
+                    "name": "corrupt",
+                    "created_at": "not-a-timestamp",
+                    "entity": "x",
+                    "language": "de",
+                    "days_back": 7,
+                    "source_country": "ch",
+                    "condition_type": "volume_above",
+                    "threshold": 1.0,
+                    "keyword": None,
+                    "last_checked": None,
+                    "last_triggered": None,
+                    "trigger_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     mgr = AlertManager(file_path=str(target), retention_days=1)
     assert len(mgr.list_all()) == 1
@@ -1512,9 +1727,18 @@ def test_alert_manager_retention_keeps_recently_created(tmp_path):
 
     target = tmp_path / "alerts.json"
     mgr = AlertManager(file_path=str(target), retention_days=1)
-    mgr.create({"name": "Fresh", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+    mgr.create(
+        {
+            "name": "Fresh",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 1.0,
+            "keyword": None,
+        }
+    )
 
     # Re-open mit retention=1 day -> created_at ist now(), bleibt
     mgr2 = AlertManager(file_path=str(target), retention_days=1)
@@ -1525,21 +1749,33 @@ def test_alert_manager_retention_keeps_recently_created(tmp_path):
 # HITL-DESTRUCTIVE Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_alert_delete_without_confirm_returns_prompt(tmp_path, monkeypatch):
     """news_alert_delete ohne confirm=True darf NICHT loeschen."""
     from news_monitor_mcp.server import (
-        AlertManager, DeleteAlertInput, news_alert_delete,
+        AlertManager,
+        DeleteAlertInput,
+        news_alert_delete,
     )
-    import news_monitor_mcp.server as srv
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+    aid = mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 1.0,
+            "keyword": None,
+        }
+    )
 
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+
     monkeypatch.setattr(_app, "_alert_manager", mgr)
     monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id=aid))
@@ -1552,17 +1788,28 @@ async def test_alert_delete_without_confirm_returns_prompt(tmp_path, monkeypatch
 @pytest.mark.asyncio
 async def test_alert_delete_with_confirm_removes_alert(tmp_path, monkeypatch):
     from news_monitor_mcp.server import (
-        AlertManager, DeleteAlertInput, news_alert_delete,
+        AlertManager,
+        DeleteAlertInput,
+        news_alert_delete,
     )
-    import news_monitor_mcp.server as srv
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
-    aid = mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+    aid = mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 1.0,
+            "keyword": None,
+        }
+    )
 
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+
     monkeypatch.setattr(_app, "_alert_manager", mgr)
     monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id=aid, confirm=True))
@@ -1574,13 +1821,15 @@ async def test_alert_delete_with_confirm_removes_alert(tmp_path, monkeypatch):
 async def test_alert_delete_nonexistent_does_not_require_confirm(tmp_path, monkeypatch):
     """Nicht-existente Alert-ID liefert sofort 'nicht gefunden', nicht den Prompt."""
     from news_monitor_mcp.server import (
-        AlertManager, DeleteAlertInput, news_alert_delete,
+        AlertManager,
+        DeleteAlertInput,
+        news_alert_delete,
     )
-    import news_monitor_mcp.server as srv
 
     mgr = AlertManager(file_path=str(tmp_path / "alerts.json"))
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.alerts_tools as _tools_alerts
+
     monkeypatch.setattr(_app, "_alert_manager", mgr)
     monkeypatch.setattr(_tools_alerts, "_alert_manager", mgr)
     result = await news_alert_delete(DeleteAlertInput(alert_id="alert_doesnotexist"))
@@ -1590,15 +1839,17 @@ async def test_alert_delete_nonexistent_does_not_require_confirm(tmp_path, monke
 @pytest.mark.asyncio
 async def test_cache_clear_without_confirm_returns_prompt(monkeypatch):
     from news_monitor_mcp.server import (
-        CacheClearInput, NewsCache, news_cache_clear,
+        CacheClearInput,
+        NewsCache,
+        news_cache_clear,
     )
-    import news_monitor_mcp.server as srv
 
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
     cache.set("search", {"q": "b"}, {"d": 2})
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.cache_admin as _tools_cache
+
     monkeypatch.setattr(_app, "_cache", cache)
     monkeypatch.setattr(_tools_cache, "_cache", cache)
 
@@ -1612,14 +1863,16 @@ async def test_cache_clear_without_confirm_returns_prompt(monkeypatch):
 @pytest.mark.asyncio
 async def test_cache_clear_with_confirm_empties_cache(monkeypatch):
     from news_monitor_mcp.server import (
-        CacheClearInput, NewsCache, news_cache_clear,
+        CacheClearInput,
+        NewsCache,
+        news_cache_clear,
     )
-    import news_monitor_mcp.server as srv
 
     cache = NewsCache()
     cache.set("search", {"q": "a"}, {"d": 1})
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.cache_admin as _tools_cache
+
     monkeypatch.setattr(_app, "_cache", cache)
     monkeypatch.setattr(_tools_cache, "_cache", cache)
 
@@ -1631,13 +1884,14 @@ async def test_cache_clear_with_confirm_empties_cache(monkeypatch):
 @pytest.mark.asyncio
 async def test_cache_clear_unknown_type_rejects_before_confirm(monkeypatch):
     """Validation-Fehler bei tool_type kommt vor dem confirm-Check."""
-    from news_monitor_mcp.server import (
-        CacheClearInput, NewsCache, news_cache_clear,
-    )
-    import news_monitor_mcp.server as srv
-
     import news_monitor_mcp.app as _app
     import news_monitor_mcp.tools.cache_admin as _tools_cache
+    from news_monitor_mcp.server import (
+        CacheClearInput,
+        NewsCache,
+        news_cache_clear,
+    )
+
     fresh = NewsCache()
     monkeypatch.setattr(_app, "_cache", fresh)
     monkeypatch.setattr(_tools_cache, "_cache", fresh)
@@ -1649,13 +1903,23 @@ async def test_cache_clear_unknown_type_rejects_before_confirm(monkeypatch):
 def test_alert_manager_creates_file_with_0o600(tmp_path):
     import os as _os
     import stat as _stat
+
     from news_monitor_mcp.server import AlertManager
 
     target = tmp_path / "alerts.json"
     mgr = AlertManager(file_path=str(target))
-    mgr.create({"name": "T", "entity": "t", "language": "de",
-        "source_country": "ch", "days_back": 7,
-        "condition_type": "volume_above", "threshold": 1.0, "keyword": None})
+    mgr.create(
+        {
+            "name": "T",
+            "entity": "t",
+            "language": "de",
+            "source_country": "ch",
+            "days_back": 7,
+            "condition_type": "volume_above",
+            "threshold": 1.0,
+            "keyword": None,
+        }
+    )
 
     mode = _stat.S_IMODE(_os.stat(str(target)).st_mode)
     assert mode == 0o600
@@ -1665,6 +1929,7 @@ def test_alert_manager_creates_file_with_0o600(tmp_path):
 
 def test_redaction_pattern_masks_x_api_key_header_dump():
     from news_monitor_mcp.server import logger as srv_logger
+
     root, buf, restore = _capture_logs()
     try:
         srv_logger.info("request headers: {'x-api-key': 'SUPERSECRET'}")
@@ -1676,4 +1941,3 @@ def test_redaction_pattern_masks_x_api_key_header_dump():
     assert "SUPERSECRET" not in blob
     assert "ANOTHERSECRET" not in blob
     assert "***" in blob
-
