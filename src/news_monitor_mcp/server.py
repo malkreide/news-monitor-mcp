@@ -177,9 +177,7 @@ def build_transport_security(host: str, port: int, allowed_origins: frozenset[st
     )
 
 
-def build_http_app(
-    token: str, allowed_origins: frozenset[str], security=None, host: str = "127.0.0.1"
-) -> Any:
+def build_http_app(token: str, allowed_origins: frozenset[str], security=None, host: str = "127.0.0.1") -> Any:
     """Thin wrapper: zieht die Starlette-App aus der MCPServer-Instanz und hängt
     den Middleware-Stack an (siehe `http_auth._attach_middlewares` für Details).
     """
@@ -194,23 +192,31 @@ def build_http_app(
 # Entry Point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Startet den News Monitor MCP Server."""
     import argparse
+
     parser = argparse.ArgumentParser(description="News Monitor MCP Server v0.3.0")
     parser.add_argument("--http", action="store_true", help="HTTP-Server statt stdio")
-    parser.add_argument("--host", default=os.environ.get("MCP_HOST", "127.0.0.1"),
-                        help="HTTP-Host (Standard: 127.0.0.1; fuer Container: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("MCP_PORT", "8000")),
-                        help="HTTP-Port (Standard: 8000)")
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("MCP_HOST", "127.0.0.1"),
+        help="HTTP-Host (Standard: 127.0.0.1; fuer Container: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get("MCP_PORT", "8000")), help="HTTP-Port (Standard: 8000)"
+    )
     args = parser.parse_args()
     configure_logging()
     if args.http:
         token = os.environ.get("MCP_BEARER_TOKEN")
         if not token:
-            print("ERROR: MCP_BEARER_TOKEN muss im HTTP-Mode gesetzt sein. "
-                  "Erzeuge z.B. mit: python -c \"import secrets; print(secrets.token_urlsafe(32))\"",
-                  file=sys.stderr)
+            print(
+                "ERROR: MCP_BEARER_TOKEN muss im HTTP-Mode gesetzt sein. "
+                'Erzeuge z.B. mit: python -c "import secrets; print(secrets.token_urlsafe(32))"',
+                file=sys.stderr,
+            )
             sys.exit(2)
         allowed = _parse_allowed_origins(os.environ.get("MCP_ALLOWED_ORIGINS"))
         security = build_transport_security(args.host, args.port, allowed)
@@ -224,6 +230,7 @@ def main() -> None:
         # mcp 2.x: transport_security is a per-app kwarg, not a setting.
         app = build_http_app(token, allowed, security, args.host)
         import uvicorn
+
         uvicorn.run(app, host=args.host, port=args.port, log_config=None)
     else:
         mcp.run()

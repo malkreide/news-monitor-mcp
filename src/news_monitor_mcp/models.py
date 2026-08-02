@@ -30,9 +30,12 @@ class SearchNewsInput(BaseModel):
     @field_validator("earliest_date", "latest_date")
     @classmethod
     def validate_date(cls, v: Optional[str]) -> Optional[str]:
-        if v is None: return v
-        try: datetime.strptime(v, "%Y-%m-%d")
-        except ValueError as e: raise ValueError("Format YYYY-MM-DD erforderlich") from e
+        if v is None:
+            return v
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError("Format YYYY-MM-DD erforderlich") from e
         return v
 
 
@@ -48,9 +51,12 @@ class TopNewsInput(BaseModel):
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: Optional[str]) -> Optional[str]:
-        if v is None: return v
-        try: datetime.strptime(v, "%Y-%m-%d")
-        except ValueError as e: raise ValueError("Format YYYY-MM-DD erforderlich") from e
+        if v is None:
+            return v
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError("Format YYYY-MM-DD erforderlich") from e
         return v
 
 
@@ -67,7 +73,8 @@ class SentimentMonitorInput(BaseModel):
     @field_validator("language")
     @classmethod
     def validate_lang(cls, v: str) -> str:
-        if v not in ("de", "en"): raise ValueError("Sentiment nur fuer de und en.")
+        if v not in ("de", "en"):
+            raise ValueError("Sentiment nur fuer de und en.")
         return v
 
 
@@ -99,13 +106,15 @@ class MediaBriefingInput(BaseModel):
     @field_validator("language")
     @classmethod
     def validate_lang(cls, v: str) -> str:
-        if v not in ("de", "en"): raise ValueError("Fuer Sentiment: de oder en.")
+        if v not in ("de", "en"):
+            raise ValueError("Fuer Sentiment: de oder en.")
         return v
 
     @field_validator("topics")
     @classmethod
     def validate_topics(cls, v: list[str]) -> list[str]:
-        if len(v) > 5: raise ValueError("Max. 5 Themen")
+        if len(v) > 5:
+            raise ValueError("Max. 5 Themen")
         return v
 
 
@@ -120,9 +129,12 @@ class FrontPagesInput(BaseModel):
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: Optional[str]) -> Optional[str]:
-        if v is None: return v
-        try: datetime.strptime(v, "%Y-%m-%d")
-        except ValueError as e: raise ValueError("Format YYYY-MM-DD erforderlich") from e
+        if v is None:
+            return v
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError("Format YYYY-MM-DD erforderlich") from e
         return v
 
 
@@ -150,19 +162,24 @@ class GeoNewsInput(BaseModel):
 
 class CreateAlertInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra="forbid")
-    name: str = Field(..., description="Name des Alerts, z.B. Schulamt Zuerich Negativalert", min_length=2, max_length=200)
+    name: str = Field(
+        ..., description="Name des Alerts, z.B. Schulamt Zuerich Negativalert", min_length=2, max_length=200
+    )
     entity: str = Field(..., description="Suchbegriff / Entitaet, z.B. Schulamt Zuerich", min_length=2, max_length=300)
     language: str = Field(default="de")
     source_country: Optional[str] = Field(default="ch,de,at")
     days_back: int = Field(default=7, ge=1, le=90)
-    condition_type: AlertConditionType = Field(..., description="sentiment_below | sentiment_above | volume_above | keyword_found")
+    condition_type: AlertConditionType = Field(
+        ..., description="sentiment_below | sentiment_above | volume_above | keyword_found"
+    )
     threshold: Optional[float] = Field(default=None, description="Schwellenwert fuer sentiment/volume conditions")
     keyword: Optional[str] = Field(default=None, max_length=200, description="Schluesselwort fuer keyword_found")
 
     @field_validator("language")
     @classmethod
     def validate_lang(cls, v: str) -> str:
-        if v not in ("de", "en"): raise ValueError("Nur de und en.")
+        if v not in ("de", "en"):
+            raise ValueError("Nur de und en.")
         return v
 
 
@@ -175,14 +192,21 @@ class CheckAlertsInput(BaseModel):
 class DeleteAlertInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra="forbid")
     alert_id: str = Field(..., description="Alert-ID aus news_alert_list", min_length=10)
-    confirm: bool = Field(default=False,
+    confirm: bool = Field(
+        default=False,
         description="Muss explizit True sein, um den Alert zu loeschen. Erstaufruf "
-                    "mit confirm=False liefert eine Bestaetigungs-Aufforderung.")
+        "mit confirm=False liefert eine Bestaetigungs-Aufforderung.",
+    )
 
 
 class CacheClearInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra="forbid")
-    tool_type: Optional[str] = Field(default=None, description="Cache-Typ leeren: search|headlines|sentiment|briefing|article|sources|front_pages|trend|geo. Leer = alles.")
-    confirm: bool = Field(default=False,
+    tool_type: Optional[str] = Field(
+        default=None,
+        description="Cache-Typ leeren: search|headlines|sentiment|briefing|article|sources|front_pages|trend|geo. Leer = alles.",
+    )
+    confirm: bool = Field(
+        default=False,
         description="Muss explizit True sein, um den Cache zu leeren. Erstaufruf "
-                    "mit confirm=False liefert eine Bestaetigungs-Aufforderung.")
+        "mit confirm=False liefert eine Bestaetigungs-Aufforderung.",
+    )

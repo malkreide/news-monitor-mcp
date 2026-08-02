@@ -56,9 +56,10 @@ class _RedactionFilter(logging.Filter):
             record.msg = _redact(record.msg)
         if record.args:
             try:
-                record.args = tuple(_redact(a) if isinstance(a, str) else a
-                                    for a in (record.args if isinstance(record.args, tuple)
-                                              else (record.args,)))
+                record.args = tuple(
+                    _redact(a) if isinstance(a, str) else a
+                    for a in (record.args if isinstance(record.args, tuple) else (record.args,))
+                )
             except Exception:
                 pass
         return True
@@ -89,29 +90,31 @@ def configure_logging(level: Optional[str] = None) -> None:
     eine Edge-Case verpasst.
     """
     resolved = (level or os.environ.get("LOG_LEVEL", "INFO")).upper()
-    dictConfig({
-        "version": 1,
-        "disable_existing_loggers": False,
-        "filters": {
-            "request_id": {"()": _RequestIdFilter},
-            "redact": {"()": _RedactionFilter},
-        },
-        "formatters": {
-            "json": {"()": _JsonFormatter},
-        },
-        "handlers": {
-            "stderr": {
-                "class": "logging.StreamHandler",
-                "stream": "ext://sys.stderr",
-                "formatter": "json",
-                "filters": ["request_id", "redact"],
-                "level": resolved,
+    dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "filters": {
+                "request_id": {"()": _RequestIdFilter},
+                "redact": {"()": _RedactionFilter},
             },
-        },
-        "root": {"handlers": ["stderr"], "level": resolved},
-        "loggers": {
-            "httpx": {"level": "WARNING", "propagate": True},
-            "httpcore": {"level": "WARNING", "propagate": True},
-            "uvicorn.access": {"level": "WARNING", "propagate": True},
-        },
-    })
+            "formatters": {
+                "json": {"()": _JsonFormatter},
+            },
+            "handlers": {
+                "stderr": {
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                    "formatter": "json",
+                    "filters": ["request_id", "redact"],
+                    "level": resolved,
+                },
+            },
+            "root": {"handlers": ["stderr"], "level": resolved},
+            "loggers": {
+                "httpx": {"level": "WARNING", "propagate": True},
+                "httpcore": {"level": "WARNING", "propagate": True},
+                "uvicorn.access": {"level": "WARNING", "propagate": True},
+            },
+        }
+    )

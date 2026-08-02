@@ -59,8 +59,9 @@ def _get_client() -> httpx.AsyncClient:
     """
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(base_url=BASE_URL, timeout=DEFAULT_TIMEOUT,
-            headers={"User-Agent": f"news-monitor-mcp/{__version__}"})
+        _client = httpx.AsyncClient(
+            base_url=BASE_URL, timeout=DEFAULT_TIMEOUT, headers={"User-Agent": f"news-monitor-mcp/{__version__}"}
+        )
     return _client
 
 

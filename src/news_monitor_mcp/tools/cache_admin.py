@@ -8,7 +8,16 @@ from news_monitor_mcp.cache import CACHE_TTL
 from news_monitor_mcp.models import CacheClearInput
 
 
-@mcp.tool(name="news_cache_stats", annotations={"title": "Cache-Statistiken", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False})
+@mcp.tool(
+    name="news_cache_stats",
+    annotations={
+        "title": "Cache-Statistiken",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
 async def news_cache_stats() -> str:
     """Cache-Statistiken: Trefferquote, gespeicherte Eintraege, gesparte API-Calls.
 
@@ -17,10 +26,12 @@ async def news_cache_stats() -> str:
     """
     stats = _cache.stats()
     total_calls = stats["hits"] + stats["misses"]
-    lines = ["## Cache-Statistiken\n",
+    lines = [
+        "## Cache-Statistiken\n",
         f"**Eintraege gesamt:** {stats['gesamt_eintraege']} | **Hit-Rate:** {stats['hit_rate']} | "
         f"**API-Calls gespart:** {stats['api_calls_gespart']}\n",
-        f"**Hits:** {stats['hits']} | **Misses:** {stats['misses']} | **Total Abfragen:** {total_calls}\n"]
+        f"**Hits:** {stats['hits']} | **Misses:** {stats['misses']} | **Total Abfragen:** {total_calls}\n",
+    ]
     if stats["nach_typ"]:
         lines.append("\n### Eintraege nach Typ\n")
         for typ, count in sorted(stats["nach_typ"].items()):
@@ -35,7 +46,16 @@ async def news_cache_stats() -> str:
     return "\n".join(lines)
 
 
-@mcp.tool(name="news_cache_clear", annotations={"title": "Cache leeren", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False})
+@mcp.tool(
+    name="news_cache_clear",
+    annotations={
+        "title": "Cache leeren",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
 async def news_cache_clear(params: CacheClearInput) -> str:
     """Leert den Cache (vollstaendig oder fuer einen spezifischen Tool-Typ).
 
@@ -50,10 +70,15 @@ async def news_cache_clear(params: CacheClearInput) -> str:
         return f"Unbekannter Tool-Typ '{params.tool_type}'. Erlaubt: {valid}"
     if not params.confirm:
         scope = f"Cache-Typ `{params.tool_type}`" if params.tool_type else "GESAMTE Cache"
-        current_size = (sum(1 for _, (_, t, _) in _cache._store.items() if t == params.tool_type)
-                        if params.tool_type else len(_cache._store))
-        return (f"Bestaetigung erforderlich: {scope} wird geleert ({current_size} Eintraege betroffen). "
-                f"Erneut mit `confirm=true` aufrufen.")
+        current_size = (
+            sum(1 for _, (_, t, _) in _cache._store.items() if t == params.tool_type)
+            if params.tool_type
+            else len(_cache._store)
+        )
+        return (
+            f"Bestaetigung erforderlich: {scope} wird geleert ({current_size} Eintraege betroffen). "
+            f"Erneut mit `confirm=true` aufrufen."
+        )
     if params.tool_type:
         count = _cache.clear(params.tool_type)
         return f"Cache fuer `{params.tool_type}` geleert: {count} Eintraege entfernt."

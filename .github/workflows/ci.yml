@@ -27,8 +27,16 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # Pin ruff so an upstream release cannot change the default rule set or
+      # formatter and break CI on unrelated, untouched code.
+      - name: Install pinned ruff
+        run: pip install ruff==0.16.1
+
       - name: Linting mit ruff
-        run: python -m ruff check src/
+        run: python -m ruff check src/ tests/ scripts/
+
+      - name: Format check
+        run: python -m ruff format --check src/ tests/ scripts/
 
       - name: Syntax-Prüfung
         run: python -m py_compile src/news_monitor_mcp/server.py
@@ -55,12 +63,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: pip install ruff
+      # Pin ruff so an upstream release cannot change the default rule set or
+      # formatter and break CI on unrelated, untouched code.
+      - run: pip install ruff==0.16.1
 
-      - run: python -m ruff check src/
+      - run: python -m ruff check src/ tests/ scripts/
 
-      # ruff format --check vorerst deaktiviert (Refactoring ausstehend)
-      # - run: python -m ruff format --check src/
+      - run: python -m ruff format --check src/ tests/ scripts/
 
   docker:
     runs-on: ubuntu-latest
