@@ -9,7 +9,13 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-from news_monitor_mcp.api_client import _auth_headers, _check_api_key, _get_client
+from news_monitor_mcp.api_client import (
+    UpstreamShapeError,
+    _auth_headers,
+    _check_api_key,
+    _get_client,
+    articles_of,
+)
 from news_monitor_mcp.app import _cache, mcp
 from news_monitor_mcp.errors import _handle_api_error, _no_key_message
 from news_monitor_mcp.formatting import (
@@ -93,7 +99,10 @@ async def news_search(params: SearchNewsInput) -> str:
                 _cache.set("search", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    articles = data.get("news", [])
+    try:
+        articles = articles_of(data, "/search-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     total = data.get("available", 0)
     if params.response_format == ResponseFormat.JSON:
         return json.dumps(
@@ -263,7 +272,10 @@ async def news_sentiment_monitor(params: SentimentMonitorInput) -> str:
                 _cache.set("sentiment", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    articles = data.get("news", [])
+    try:
+        articles = articles_of(data, "/search-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     total_available = data.get("available", 0)
     sentiments = [a["sentiment"] for a in articles if a.get("sentiment") is not None]
     positive = [s for s in sentiments if s > 0.1]
@@ -378,7 +390,10 @@ async def news_media_briefing(params: MediaBriefingInput) -> str:
             except Exception as e:
                 lines.append(f"\n## {topic}\n{_handle_api_error(e)}\n---")
                 continue
-        articles = data.get("news", [])
+        try:
+            articles = articles_of(data, "/search-news")
+        except UpstreamShapeError as e:
+            return _handle_api_error(e)
         total = data.get("available", 0)
         avg = _calc_avg_sentiment(articles)
         label = _sentiment_label(avg)
@@ -435,7 +450,10 @@ async def news_retrieve_article(params: RetrieveArticleInput) -> str:
                 _cache.set("article", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    news_list = data.get("news", [])
+    try:
+        news_list = articles_of(data, "/retrieve-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     if not news_list:
         return f"Kein Artikel mit ID {params.article_id} gefunden."
     article = news_list[0]
@@ -622,7 +640,10 @@ async def news_trend_radar(params: TrendRadarInput) -> str:
                 _cache.set("trend", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    articles = data.get("news", [])
+    try:
+        articles = articles_of(data, "/search-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     total = data.get("available", 0)
     if params.response_format == ResponseFormat.JSON:
         return json.dumps(
@@ -699,7 +720,10 @@ async def news_geo_search(params: GeoNewsInput) -> str:
                 _cache.set("geo", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    articles = data.get("news", [])
+    try:
+        articles = articles_of(data, "/search-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     total = data.get("available", 0)
     if params.response_format == ResponseFormat.JSON:
         return json.dumps(

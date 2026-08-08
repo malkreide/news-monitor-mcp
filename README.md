@@ -251,12 +251,74 @@ news-monitor-mcp/
 ## Testing
 
 ```bash
-# Unit tests (no API key required)
+# Unit + contract tests (no network) — this is what CI runs
 PYTHONPATH=src pytest tests/ -m "not live"
 
-# Integration tests (live API calls, API key required)
+# Live tests. The route check needs no key; the data tests skip without one.
 PYTHONPATH=src pytest tests/ -m "live"
+
+# Re-record the route inventory (writes tests/fixtures/ + PROVENANCE.md)
+PYTHONPATH=src python scripts/record_fixtures.py
 ```
+
+**135 tests** — 130 offline, 5 live (2 of which need no API key).
+
+### Three live tests never ran
+
+Until 2026-08-08 the repo's three live tests carried `@pytest.mark.live` but no
+`@pytest.mark.asyncio`. Under pytest-asyncio's strict default that does not mean
+"skipped" — it means `async def functions are not natively supported`. They
+never executed, and anyone running `-m live` got three errors that said nothing
+about the source. CI excludes `-m live`, so nothing reported it.
+
+`asyncio_mode = "auto"` now makes a forgotten marker unable to cause this.
+
+And running would not have shown much either:
+
+```python
+assert "Volksschule" in result or "Ergebnisse" in result
+```
+
+The second branch matches the tool's own results heading, so the disjunction
+could not fail. `assert "Top-Schlagzeilen" in result` and `assert "Sentiment" in
+result` likewise matched only the template. All three now assert something that
+can fail, and they **skip** rather than fail when no key is set — "red" should
+mean something is wrong, not that you have no key.
+
+### What is verified without a key, and what is not
+
+`tests/fixtures/api_routen.json` records, for each of the five paths the tools
+build, the status code and content type measured without a key. The gateway
+routes **before** authenticating:
+
+| Path | Response |
+|---|---|
+| the five paths the server builds | 401, `application/json` |
+| a freely invented path (control) | 404, `text/html` |
+
+So a 401 means "this route exists". Without the control it would only mean "I
+got a 401" — and that is not a given: `epl.bag.admin.ch` elsewhere in this
+portfolio answers 401 for invented paths too. The recorder therefore re-measures
+the control on every run and aborts if it stops discriminating.
+
+**Still open, and marked as such in `PROVENANCE.md`:** whether the query
+parameter names the server sends are correct. The API answers 401 regardless of
+parameters, so no key means no verification. In `global-education-mcp` in this
+same portfolio exactly that went wrong — two filters were silently inert
+because unknown parameters were answered with HTTP 200 and dropped. That check
+is outstanding, not done.
+
+### Empty result vs. changed response shape
+
+`data.get("news", [])` answers two entirely different cases the same way: "the
+source found nothing" and "the source answers differently than we assume". The
+second becomes "0 results" — complete, plausible, formatted and wrong. That is
+not hypothetical: in `global-education-mcp` the envelope had been renamed, so
+**every** answer came back empty while 128 tests stayed green.
+
+`articles_of()` now reads the envelope. An empty `news` stays an empty list — a
+statement by the source. A *missing* `news` is not a statement about the news
+but about the response, and is reported as such.
 
 ---
 

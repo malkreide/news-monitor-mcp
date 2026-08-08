@@ -77,4 +77,15 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["live: marks tests as requiring live API access (deselect with '-m not live')"]
+# `auto` statt des Strict-Defaults. Anlass: Die drei Live-Tests trugen nur
+# `@pytest.mark.live` und keinen `@pytest.mark.asyncio`. Im Strict-Modus heisst
+# das nicht «uebersprungen», sondern «async def functions are not natively
+# supported» — sie liefen also nie, und wer `-m live` aufrief, bekam drei
+# Fehler, die nichts ueber die Quelle aussagten.
+#
+# Mit `auto` kann eine vergessene Markierung diesen Fehler nicht mehr erzeugen:
+# Jede `async def test_*` laeuft.
+asyncio_mode = "auto"
+markers = [
+    "live: braucht Netzzugang. Die Routenpruefung laeuft ohne Schluessel; Tests, die einen WORLD_NEWS_API_KEY brauchen, ueberspringen sich ohne (deselect mit '-m not live')",
+]

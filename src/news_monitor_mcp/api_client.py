@@ -28,6 +28,51 @@ DACH_SOURCE_COUNTRIES = "ch,de,at"
 _client: Optional[httpx.AsyncClient] = None
 
 
+class UpstreamShapeError(RuntimeError):
+    """Die Quelle hat geantwortet, aber nicht mit dem, womit sie antwortet.
+
+    Bewusst getrennt von einem Transportfehler: Warten hilft beim einen und
+    nie beim anderen.
+    """
+
+
+def articles_of(payload: object, endpoint: str = "") -> list:
+    """Die Artikelliste einer Antwort — oder ein Fehler, nie stillschweigend [].
+
+    WARUM DAS NICHT `payload.get("news", [])` BLEIBEN DURFTE. Der Ausdruck
+    beantwortet zwei voellig verschiedene Faelle gleich: «die Quelle hat
+    nichts gefunden» und «die Quelle antwortet anders, als wir annehmen». Aus
+    dem zweiten wird damit die Aussage «0 Ergebnisse» — vollstaendig,
+    plausibel, formatiert und falsch.
+
+    Das ist kein hypothetisches Risiko. In `global-education-mcp` desselben
+    Portfolios stand genau dieses Muster, und weil der Umschlag der Quelle
+    inzwischen anders hiess, kam aus **jeder** Antwort eine leere Liste — bei
+    128 gruenen Tests.
+
+    Ein leeres `news` bleibt eine Aussage der Quelle und kommt als leere
+    Liste zurueck. Ein FEHLENDES `news` ist keine Aussage ueber die Nachrichten,
+    sondern ueber die Antwort, und wird als solcher gemeldet.
+    """
+    wo = f" von `{endpoint}`" if endpoint else ""
+    if not isinstance(payload, dict):
+        raise UpstreamShapeError(
+            f"Die Antwort{wo} ist {type(payload).__name__}, kein Objekt. "
+            "Das ist keine leere Treffermenge, sondern eine andere Antwortform."
+        )
+    if "news" not in payload:
+        raise UpstreamShapeError(
+            f"Die Antwort{wo} fuehrt kein Feld `news`. Vorhanden: "
+            f"{sorted(payload)}. Das ist keine leere Treffermenge, sondern "
+            "eine andere Antwortform — die Abfrage gehoert geprueft, nicht "
+            "wiederholt."
+        )
+    news = payload["news"]
+    if not isinstance(news, list):
+        raise UpstreamShapeError(f"`news`{wo} ist {type(news).__name__}, nicht eine Liste.")
+    return news
+
+
 def _get_api_key() -> Optional[SecretStr]:
     """Liest den API-Key aus dem Env und wickelt ihn in SecretStr, um versehentliche
     Stringifizierung in Logs/Repr zu verhindern. SecretStr.__repr__ liefert

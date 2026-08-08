@@ -1,0 +1,48 @@
+{
+  "recorded_at": "2026-08-08",
+  "basis_url": "https://api.worldnewsapi.com",
+  "routen": {
+    "search-news": {
+      "pfad": "/search-news",
+      "status": 401,
+      "content_type": "application/json",
+      "gebaut_von": "news_search, news_sentiment_monitor, Alerts, Briefing"
+    },
+    "top-news": {
+      "pfad": "/top-news",
+      "status": 401,
+      "content_type": "application/json",
+      "gebaut_von": "news_top_headlines"
+    },
+    "retrieve-news": {
+      "pfad": "/retrieve-news",
+      "status": 401,
+      "content_type": "application/json",
+      "gebaut_von": "news_article_details"
+    },
+    "retrieve-front-page": {
+      "pfad": "/retrieve-front-page",
+      "status": 401,
+      "content_type": "application/json",
+      "gebaut_von": "news_front_pages"
+    },
+    "search-news-sources": {
+      "pfad": "/search-news-sources",
+      "status": 401,
+      "content_type": "application/json",
+      "gebaut_von": "news_source_lookup"
+    },
+    "kontrolle_erfundener_pfad": {
+      "pfad": "/diesen-pfad-gibt-es-nicht",
+      "status": 404,
+      "content_type": "text/html;charset=utf-8",
+      "gebaut_von": "KONTROLLE: erfundener Pfad, von keinem Werkzeug gebaut"
+    },
+    "kontrolle_fast_richtig": {
+      "pfad": "/search-news-die-es-nicht-gibt",
+      "status": 404,
+      "content_type": "text/html;charset=utf-8",
+      "gebaut_von": "KONTROLLE: erfundener Pfad, von keinem Werkzeug gebaut"
+    }
+  }
+}

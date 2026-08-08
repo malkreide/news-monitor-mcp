@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben
+
+- **Drei Live-Tests liefen ueberhaupt nie.** Sie trugen `@pytest.mark.live`,
+  aber keinen `@pytest.mark.asyncio`. Im Strict-Default von `pytest-asyncio`
+  heisst das nicht «uebersprungen», sondern «async def functions are not
+  natively supported» — wer `-m live` aufrief, bekam drei Fehler, die nichts
+  ueber die Quelle aussagten. Die CI schliesst `-m live` aus, also meldete es
+  niemand.
+
+  Behoben ueber `asyncio_mode = "auto"` in `pyproject.toml`. Das ist der
+  strukturelle Fix statt des punktuellen: Eine vergessene Markierung kann
+  diesen Fehler nicht mehr erzeugen.
+
+- **Und laufend haetten sie wenig gezeigt.** Alle drei Zusicherungen trafen
+  nur die eigene Vorlage:
+
+      assert "Volksschule" in result or "Ergebnisse" in result
+
+  Der zweite Zweig ist die Ueberschrift der Ergebnisliste, die Disjunktion
+  konnte also nicht fehlschlagen. `assert "Top-Schlagzeilen" in result` und
+  `assert "Sentiment" in result` ebenso.
+
+  Neu sichern sie zu, dass Artikel zurueckkommen, dass ein Cluster Inhalt hat
+  und dass ein Sentiment eine Zahl ist. Ohne Schluessel **ueberspringen** sie
+  sich, statt rot zu melden: «rot» soll heissen, dass etwas nicht stimmt,
+  nicht dass jemand keinen Schluessel hat.
+
+- **`data.get("news", [])` konnte einen Formfehler in «0 Ergebnisse»
+  verwandeln.** Der Ausdruck beantwortet zwei voellig verschiedene Faelle
+  gleich: «die Quelle hat nichts gefunden» und «die Quelle antwortet anders,
+  als wir annehmen».
+
+  Das ist kein hypothetisches Risiko. In `global-education-mcp` desselben
+  Portfolios stand genau dieses Muster; weil der Umschlag der Quelle
+  inzwischen anders hiess, kam aus **jeder** Antwort eine leere Liste — bei
+  128 gruenen Tests.
+
+  Neu liest `articles_of()` den Umschlag an sieben Aufrufstellen. Ein leeres
+  `news` bleibt eine leere Liste, das ist eine Aussage der Quelle. Ein
+  FEHLENDES `news` ist keine Aussage ueber die Nachrichten, sondern ueber die
+  Antwort, und wird als `UpstreamShapeError` mit eigener Meldung gemeldet —
+  nicht als «Details siehe Server-Log».
+
+### Hinzugefuegt
+
+- **Die erste Live-Abdeckung dieses Repos, die ohne API-Key laeuft** — der
+  Bestand der Routen. Gemessen wurde, was die Quelle auch ohne Schluessel
+  preisgibt: welche der fuenf Pfade, die die Werkzeuge bauen, es gibt.
+
+  **Befund: alle fuenf.** Das ist eine gute Nachricht und trotzdem ein
+  Ergebnis — vorher war es unbelegt.
+
+  Getragen wird sie von einer Kontrolle. Das Gateway routet vor der
+  Authentifizierung:
+
+      /search-news                 -> 401  application/json
+      /diesen-pfad-gibt-es-nicht   -> 404  text/html
+
+  Ein 401 heisst dort also «diese Route gibt es». Ohne den erfundenen Pfad
+  hiesse der Befund nur «ich habe einen 401 bekommen» — und das ist keine
+  Selbstverstaendlichkeit: `epl.bag.admin.ch` im selben Portfolio antwortet
+  auch auf erfundene Pfade mit 401. Der Recorder misst die Kontrolle deshalb
+  bei jedem Lauf mit und bricht ab, wenn sie nicht mehr unterscheidet.
+
+- **`scripts/record_fixtures.py` und `tests/fixtures/PROVENANCE.md`.** Die
+  Antwort-Payloads sind darin ausdruecklich als **NICHT aufgezeichnet**
+  gefuehrt, mit dem gemessenen Statuscode als Grund — statt ihnen ein Datum
+  anzuschreiben, das nicht stimmt.
+
+  Ausdruecklich als **offen** markiert ist damit auch: ob die
+  Query-Parameternamen stimmen, die der Server sendet. Die API antwortet
+  unabhaengig von den Parametern mit 401; ohne Schluessel ist das nicht
+  pruefbar. In `global-education-mcp` waren genau dort zwei Filter still
+  wirkungslos, weil unbekannte Parameter mit HTTP 200 beantwortet und
+  fallengelassen wurden. Diese Pruefung steht aus und gilt nicht als
+  erledigt.
+
+- **`tests/test_antwortform.py`** — 15 Tests, die **in** der CI laufen. Das
+  ist der Kern der Lehre aus dem ersten Befund: Was dauerhaft gelten soll,
+  gehoert nicht in eine Datei, die die CI ueberspringt.
+
+  Gegengeprueft mit drei gezielten Rueckmutationen — stiller Default zurueck
+  an eine Aufrufstelle, `articles_of` faellt still auf `[]` zurueck,
+  `asyncio_mode` zurueck auf `strict`. Alle drei machen die Suite rot; die
+  dritte trifft dabei genau die neuen Routen-Tests und zeigt damit, dass der
+  Modus-Wechsel traegt.
+
 ## [0.3.6] - 2026-08-02
 
 ### Behoben
