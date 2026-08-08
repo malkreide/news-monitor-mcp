@@ -8,7 +8,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from news_monitor_mcp.alerts import ALERTS_FILE
-from news_monitor_mcp.api_client import _auth_headers, _check_api_key, _get_client
+from news_monitor_mcp.api_client import (
+    _auth_headers,
+    _check_api_key,
+    _get_client,
+    articles_of,
+)
 from news_monitor_mcp.app import _alert_manager, mcp
 from news_monitor_mcp.errors import _handle_api_error, _no_key_message
 from news_monitor_mcp.formatting import (
@@ -186,7 +191,7 @@ async def news_alert_check(params: CheckAlertsInput) -> str:
             r = await _get_client().get("/search-news", params=p, headers=_auth_headers(api_key))
             r.raise_for_status()
             data = r.json()
-            articles = data.get("news", [])
+            articles = articles_of(data, "/search-news")
             avg_sentiment = _calc_avg_sentiment(articles)
             triggered, reason = _alert_manager.evaluate_condition(alert, articles, avg_sentiment)
         except Exception as e:

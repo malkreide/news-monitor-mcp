@@ -227,7 +227,9 @@ news-monitor-mcp/
 │       └── server.py          # Alle 9 Tools
 ├── tests/
 │   ├── __init__.py
-│   └── test_server.py         # 20 Tests (Unit + Live)
+│   ├── fixtures/              # Aufgezeichneter Routenbestand + PROVENANCE.md
+│   ├── test_antwortform.py    # Vertragstests (laufen in der CI)
+│   └── test_server.py         # Unit- und Live-Tests
 ├── pyproject.toml
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -241,12 +243,80 @@ news-monitor-mcp/
 ## Tests
 
 ```bash
-# Unit-Tests (kein API-Key erforderlich)
+# Unit- und Vertragstests (ohne Netz) — das fährt die CI
 PYTHONPATH=src pytest tests/ -m "not live"
 
-# Integrationstests (Live-API-Aufrufe, API-Key erforderlich)
+# Live-Tests. Die Routenprüfung braucht keinen Schlüssel;
+# die Datentests überspringen sich ohne einen.
 PYTHONPATH=src pytest tests/ -m "live"
+
+# Routenbestand neu aufzeichnen (schreibt tests/fixtures/ + PROVENANCE.md)
+PYTHONPATH=src python scripts/record_fixtures.py
 ```
+
+**135 Tests** — 130 offline, 5 live (zwei davon ohne API-Key).
+
+### Drei Live-Tests liefen nie
+
+Bis zum 2026-08-08 trugen die drei Live-Tests dieses Repos `@pytest.mark.live`,
+aber keinen `@pytest.mark.asyncio`. Im Strict-Default von pytest-asyncio heisst
+das nicht «übersprungen», sondern `async def functions are not natively
+supported`. Sie liefen also nie, und wer `-m live` aufrief, bekam drei Fehler,
+die nichts über die Quelle aussagten. Die CI schliesst `-m live` aus, also
+meldete es niemand.
+
+`asyncio_mode = "auto"` macht eine vergessene Markierung jetzt wirkungslos.
+
+Und laufend hätten sie ebenfalls wenig gezeigt:
+
+```python
+assert "Volksschule" in result or "Ergebnisse" in result
+```
+
+Der zweite Zweig trifft die eigene Ergebnis-Überschrift des Werkzeugs, die
+Disjunktion konnte also nicht fehlschlagen. `assert "Top-Schlagzeilen" in
+result` und `assert "Sentiment" in result` trafen ebenfalls nur die Vorlage.
+Alle drei sichern jetzt etwas zu, das fehlschlagen kann — und sie
+**überspringen** sich ohne Schlüssel, statt rot zu melden: «rot» soll heissen,
+dass etwas nicht stimmt, nicht dass jemand keinen Schlüssel hat.
+
+### Was ohne Schlüssel belegt ist — und was nicht
+
+`tests/fixtures/api_routen.json` hält für jeden der fünf Pfade, die die
+Werkzeuge bauen, Statuscode und Content-Type fest, ohne Schlüssel gemessen. Das
+Gateway routet **vor** der Authentifizierung:
+
+| Pfad | Antwort |
+|---|---|
+| die fünf Pfade, die der Server baut | 401, `application/json` |
+| ein frei erfundener Pfad (Kontrolle) | 404, `text/html` |
+
+Ein 401 heisst dort also «diese Route gibt es». Ohne die Kontrolle hiesse es nur
+«ich habe einen 401 bekommen» — und das ist keine Selbstverständlichkeit:
+`epl.bag.admin.ch` im selben Portfolio antwortet auch auf erfundene Pfade mit
+401. Der Recorder misst die Kontrolle deshalb bei jedem Lauf mit und bricht ab,
+wenn sie nicht mehr unterscheidet.
+
+**Offen und in `PROVENANCE.md` als offen markiert:** ob die
+Query-Parameternamen stimmen, die der Server sendet. Die API antwortet
+unabhängig von den Parametern mit 401; ohne Schlüssel ist das nicht prüfbar. In
+`global-education-mcp` desselben Portfolios ging genau das schief — zwei Filter
+waren still wirkungslos, weil unbekannte Parameter mit HTTP 200 beantwortet und
+fallengelassen wurden. Diese Prüfung steht aus, sie gilt nicht als erledigt.
+
+### Leere Treffermenge ist nicht dasselbe wie geänderte Antwortform
+
+`data.get("news", [])` beantwortet zwei völlig verschiedene Fälle gleich: «die
+Quelle hat nichts gefunden» und «die Quelle antwortet anders, als wir
+annehmen». Aus dem zweiten wird «0 Ergebnisse» — vollständig, plausibel,
+formatiert und falsch. Das ist kein Gedankenspiel: In `global-education-mcp`
+hiess der Umschlag inzwischen anders, aus **jeder** Antwort kam eine leere
+Liste, und 128 Tests blieben grün.
+
+`articles_of()` liest den Umschlag jetzt. Ein leeres `news` bleibt eine leere
+Liste — das ist eine Aussage der Quelle. Ein *fehlendes* `news` ist keine
+Aussage über die Nachrichten, sondern über die Antwort, und wird als solche
+gemeldet.
 
 ---
 

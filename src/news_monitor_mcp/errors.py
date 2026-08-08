@@ -37,5 +37,17 @@ def _handle_api_error(e: Exception) -> str:
         return "Fehler: Timeout."
     if isinstance(e, httpx.ConnectError):
         return "Fehler: Keine Verbindung zur WorldNewsAPI."
+    # Ein Formfehler ist kein Transportfehler: Warten hilft beim einen und nie
+    # beim anderen. Deshalb bekommt er eine eigene Meldung — und vor allem
+    # ueberhaupt eine. Bliebe er stumm, waere er von «0 Ergebnisse» nicht zu
+    # unterscheiden, und genau diese Verwechslung sucht dieses Portfolio.
+    #
+    # Lokaler Import, damit `errors` nicht auf Modulebene von `api_client`
+    # abhaengt.
+    from news_monitor_mcp.api_client import UpstreamShapeError
+
+    if isinstance(e, UpstreamShapeError):
+        logger.warning("Unerwartete Antwortform der WorldNewsAPI: %s", e)
+        return f"Fehler: Unerwartete Antwortform der WorldNewsAPI. {e}"
     logger.exception("Unerwarteter API-Fehler")
     return f"Fehler: {type(e).__name__} – Details siehe Server-Log"

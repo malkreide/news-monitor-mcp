@@ -3,6 +3,8 @@
 import io
 import json as _json
 import logging as _logging
+import os
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -309,34 +311,69 @@ async def test_trend_radar_mock():
 
 
 # ---------------------------------------------------------------------------
-# Live-Tests (nur mit echtem API-Key)
+# Live-Tests
+#
+# WAS HIER VORHER NICHT LIEF. Die drei Tests unten trugen `@pytest.mark.live`,
+# aber keinen `@pytest.mark.asyncio`. Im Strict-Modus von pytest-asyncio heisst
+# das nicht «uebersprungen», sondern «async def functions are not natively
+# supported» — sie liefen also **nie**, und wer `-m live` aufrief, bekam drei
+# Fehler, die nichts ueber die Quelle aussagten. Behoben ueber
+# `asyncio_mode = "auto"` in `pyproject.toml`: Eine vergessene Markierung kann
+# diesen Fehler jetzt nicht mehr erzeugen.
+#
+# UND SIE HAETTEN AUCH LAUFEND WENIG GEZEIGT:
+#
+#     assert "Volksschule" in result or "Ergebnisse" in result
+#
+# Der zweite Zweig trifft die eigene Ueberschrift der Ergebnisliste und ist
+# damit immer wahr — die Disjunktion konnte nicht fehlschlagen. `assert
+# "Top-Schlagzeilen" in result` und `assert "Sentiment" in result` trafen
+# ebenfalls nur die eigene Vorlage.
+#
+# OHNE SCHLUESSEL wird uebersprungen statt rot gemeldet: «rot» soll heissen,
+# dass etwas nicht stimmt — nicht, dass jemand keinen Schluessel hat.
 # ---------------------------------------------------------------------------
 
+_ohne_key = pytest.mark.skipif(
+    not os.environ.get("WORLD_NEWS_API_KEY"),
+    reason="WORLD_NEWS_API_KEY nicht gesetzt — ohne Schluessel gibt es keine Antwort, die etwas belegt.",
+)
+
 
 @pytest.mark.live
+@_ohne_key
 async def test_live_search_schweizer_news():
-    """Sucht echte Schweizer News (Live-Test)."""
-    params = SearchNewsInput(
-        query="Volksschule",
-        language="de",
-        source_country="ch",
-        number=3,
-    )
+    """Sucht echte Schweizer News und prueft, dass Artikel zurueckkommen."""
+    params = SearchNewsInput(query="Volksschule", language="de", source_country="ch", number=3)
     result = await news_search(params)
-    assert "Volksschule" in result or "Ergebnisse" in result
+    assert "Kein API-Key" not in result
+    assert "Fehler" not in result, result[:300]
+    # Eine leere Trefferliste ist etwas anderes als eine Trefferliste, und
+    # «0 Treffer» war in diesem Portfolio schon zweimal die Form, in der ein
+    # Formfehler auftrat.
+    assert "**0** Treffer" not in result and "Keine Artikel" not in result, (
+        "Die Suche liefert nichts. Das kann stimmen — dann gehoert der "
+        "Suchbegriff angepasst; es kann aber auch heissen, dass der Umschlag "
+        "der Antwort nicht mehr `news` heisst."
+    )
 
 
 @pytest.mark.live
+@_ohne_key
 async def test_live_top_news_schweiz():
-    """Ruft echte Top-News der Schweiz ab (Live-Test)."""
+    """Ruft echte Top-News der Schweiz ab."""
     params = TopNewsInput(source_country="ch", language="de", number=5)
     result = await news_top_headlines(params)
-    assert "Top-Schlagzeilen" in result
+    assert "Kein API-Key" not in result
+    assert "Fehler" not in result, result[:300]
+    # `Top-Schlagzeilen` ist die eigene Ueberschrift und belegt nichts.
+    assert "###" in result or "Rang" in result, result[:300]
 
 
 @pytest.mark.live
+@_ohne_key
 async def test_live_sentiment_ki_bildung():
-    """Analysiert Sentiment zu 'KI Bildung' (Live-Test)."""
+    """Analysiert Sentiment und prueft, dass ein Wert berechnet wurde."""
     params = SentimentMonitorInput(
         entity="KI Bildung Schweiz",
         language="de",
@@ -344,7 +381,80 @@ async def test_live_sentiment_ki_bildung():
         source_country="ch,de,at",
     )
     result = await news_sentiment_monitor(params)
-    assert "Sentiment" in result
+    assert "Kein API-Key" not in result
+    assert "Fehler" not in result, result[:300]
+    # Ein Sentiment ist eine Zahl. «Sentiment» allein stand auch in der
+    # Ueberschrift der leeren Antwort.
+    assert re.search(r"-?\d+[.,]\d+", result), result[:300]
+
+
+# ---------------------------------------------------------------------------
+# Live-Tests OHNE Schluessel: der Bestand der Routen
+#
+# Die erste Live-Abdeckung dieses Repos, die ueberall laeuft. Sie prueft nicht
+# die Daten — dafuer braucht es einen Schluessel —, sondern ob es die fuenf
+# Pfade gibt, die der Server baut.
+#
+# Entscheidend sind die Kontrollen. Das Gateway routet **vor** der
+# Authentifizierung:
+#
+#     /search-news                 -> 401, application/json
+#     /diesen-pfad-gibt-es-nicht   -> 404, text/html (Tomcat-Fehlerseite)
+#
+# Ein 401 heisst also «diese Route gibt es», ein 404 «diese nicht». Ohne die
+# erfundenen Pfade belegte die Messung nur, dass ICH einen 401 bekomme — nicht,
+# was das Gateway unterscheidet. Diesen Unterschied hat dieses Portfolio
+# mehrfach verwechselt.
+#
+# Anderswo traegt dieselbe Messung uebrigens nicht: `epl.bag.admin.ch`
+# antwortet auch auf erfundene Pfade mit 401. Deshalb steht die Kontrolle hier
+# als eigener Test und nicht als Kommentar.
+# ---------------------------------------------------------------------------
+
+_ROUTEN = ["/search-news", "/top-news", "/retrieve-news", "/retrieve-front-page", "/search-news-sources"]
+_KONTROLL_PFADE = ["/diesen-pfad-gibt-es-nicht", "/search-news-die-es-nicht-gibt"]
+
+
+@pytest.mark.live
+async def test_live_kontrolle_erfundene_pfade_geben_404():
+    """Zuerst die Kontrolle — ohne sie belegt der Test darunter nichts."""
+    import httpx
+
+    from news_monitor_mcp.api_client import BASE_URL
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+        for pfad in _KONTROLL_PFADE:
+            r = await c.get(f"{BASE_URL}{pfad}")
+            assert r.status_code == 404, (
+                f"{pfad} antwortet mit {r.status_code} statt 404 — dann traegt "
+                "die Unterscheidung 401/404 nicht mehr, und der Test darunter "
+                "gehoert neu gemessen."
+            )
+
+
+@pytest.mark.live
+async def test_live_jede_gebaute_route_existiert():
+    """Alle fuenf Pfade, die der Server baut, fuehrt die Quelle.
+
+    Kein Schluessel noetig: Die Unterscheidung, um die es geht, macht das
+    Gateway vor der Schluesselpruefung.
+    """
+    import httpx
+
+    from news_monitor_mcp.api_client import BASE_URL
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+        for pfad in _ROUTEN:
+            r = await c.get(f"{BASE_URL}{pfad}")
+            assert r.status_code == 401, (
+                f"{pfad} antwortet mit {r.status_code}. 404 hiesse: Diese Route "
+                "fuehrt die Quelle nicht mehr, und das Werkzeug, das sie baut, "
+                "ist kaputt."
+            )
+            assert "json" in r.headers.get("content-type", ""), (
+                f"{pfad} antwortet nicht mehr mit JSON — dann ist der 401 "
+                "moeglicherweise eine Fehlerseite und keine Auskunft der API."
+            )
 
 
 # ---------------------------------------------------------------------------
