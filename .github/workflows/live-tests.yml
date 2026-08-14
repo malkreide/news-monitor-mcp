@@ -41,6 +41,70 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # ===== PROBE — wird vor dem PR wieder entfernt =====
+      # Die drei Parameter, die in PROVENANCE.md noch als ungeprueft stehen:
+      # `text`, `language`, `source-country`. Sie stehen in jeder Basisabfrage
+      # und waren deshalb nie gegen eine Variante OHNE sie geprueft.
+      #
+      # Gemessen wird gegen einen jeweils anderen Wert. Waere einer von ihnen
+      # wirkungslos, kaeme zweimal dasselbe zurueck — die Quelle verwirft
+      # unbekannte Parameter still (gemessen 2026-08-14), ein 200 belegt hier
+      # also nichts.
+      #
+      # Drei Abbruchgruende, damit kein Nicht-Ergebnis als Ergebnis durchgeht:
+      # HTTP != 200 (etwa aufgebrauchtes Kontingent), fehlender `news`-Umschlag,
+      # oder eine leere Seite im Vergleich.
+      - name: PROBE — wirken text, language und source-country?
+        env:
+          K: ${{ secrets.WORLD_NEWS_API_KEY }}
+        run: |
+          set -uo pipefail
+          B="https://api.worldnewsapi.com/search-news"
+          W="earliest-publish-date=2026-07-24%2000:00:00&latest-publish-date=2026-08-12%2023:59:59"
+
+          hole() { # $1 = URL -> gibt "available|ids" aus, bricht sonst ab
+            code=$(curl -s -o /tmp/a.json -w '%{http_code}' -H "x-api-key: $K" "$1")
+            if [ "$code" != "200" ]; then
+              echo "::error::HTTP $code statt 200 — kein Messergebnis. $(head -c 200 /tmp/a.json)"
+              exit 1
+            fi
+            if ! jq -e 'has("news")' /tmp/a.json >/dev/null 2>&1; then
+              echo "::error::Antwort ohne \`news\`-Umschlag — kein Messergebnis. $(head -c 200 /tmp/a.json)"
+              exit 1
+            fi
+            jq -c '{available, ids: [.news[].id]}' /tmp/a.json
+          }
+
+          vgl() { # $1 Label, $2 URL-A, $3 URL-B
+            a=$(hole "$2") || exit 1
+            b=$(hole "$3") || exit 1
+            for s in "$a" "$b"; do
+              if [ "$(echo "$s" | jq '.ids | length')" -lt 1 ]; then
+                echo "::error::$1: eine Seite ohne Treffer — der Vergleich belegt nichts. $s"
+                exit 1
+              fi
+            done
+            if [ "$a" = "$b" ]; then echo "  $1: GLEICH -> ohne Wirkung"
+            else echo "  $1: VERSCHIEDEN -> wirkt"; fi
+            echo "      A=$(echo "$a" | head -c 120)"
+            echo "      B=$(echo "$b" | head -c 120)"
+          }
+
+          echo "== text =="
+          vgl "Schule vs Bundesrat" \
+              "$B?text=Schule&language=de&number=5&$W" \
+              "$B?text=Bundesrat&language=de&number=5&$W"
+
+          echo "== language =="
+          vgl "de vs fr" \
+              "$B?text=Schule&language=de&number=5&$W" \
+              "$B?text=Schule&language=fr&number=5&$W"
+
+          echo "== source-country =="
+          vgl "ch vs at" \
+              "$B?text=Schule&language=de&source-country=ch&number=5&$W" \
+              "$B?text=Schule&language=de&source-country=at&number=5&$W"
+
       - name: Live-Tests gegen die echte Quelle
         id: pytest
         run: pytest tests/ -m live -v --junitxml=live-report.xml
