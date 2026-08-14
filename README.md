@@ -395,7 +395,7 @@ in-memory cache). None of the 15 tools modify any external data source.
 | Constraint | WorldNewsAPI Free Tier | Paid Plans |
 |---|---|---|
 | Quota | 50 points/day | 500 – 50,000 points/day |
-| Articles/call | 10 | Up to 100 |
+| Articles/call | Up to 100 | Up to 100 |
 | Historical depth | 30 days | Extended |
 | Timeout per call | 30 seconds | 30 seconds |
 
@@ -407,9 +407,11 @@ year. Two caveats worth knowing before you plan around this table:
   endpoint and its options, so there is no fixed "calls per day" figure — the
   earlier claim of 1,000 calls/month was both the wrong unit and the wrong
   magnitude.
-- The articles-per-call split is **not stated per plan** in the public docs,
-  which only give `number` ≤ 100 per request. The value of 10 for the free
-  plan is inherited from earlier versions of this README and unverified.
+- Articles per call is **not plan-dependent**. Measured 2026-08-14 on the free
+  plan: `number=50` returned 50 articles, `number=100` returned 100, both
+  HTTP 200 (`available: 13037` in each case). Earlier versions of this README
+  claimed a cap of 10 for the free plan — that was this server's own default
+  (`DEFAULT_RESULTS`), mistaken for a limit of the source.
 
 The TTL cache (v0.2+) reduces redundant calls by up to 80%.
 

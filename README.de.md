@@ -393,7 +393,7 @@ Die 3 Ausnahmen sind lokale Operationen: `news_alert_create` und `news_alert_del
 | Einschränkung | WorldNewsAPI Free Tier | Kostenpflichtige Pläne |
 |---|---|---|
 | Kontingent | 50 Punkte/Tag | 500 – 50'000 Punkte/Tag |
-| Artikel/Call | 10 | Bis 100 |
+| Artikel/Call | Bis 100 | Bis 100 |
 | Historische Tiefe | 30 Tage | Erweitert |
 | Timeout pro Call | 30 Sekunden | 30 Sekunden |
 
@@ -406,9 +406,11 @@ Tabelle plant:
   hängt vom Endpunkt und seinen Optionen ab; eine feste Zahl «Calls pro Tag»
   gibt es deshalb nicht — die frühere Angabe «1'000 Calls/Monat» war die
   falsche Einheit *und* die falsche Grössenordnung.
-- Die Aufteilung Artikel/Call ist in der öffentlichen Doku **nicht nach Plan
-  ausgewiesen**; dort steht nur `number` ≤ 100 pro Request. Die 10 für den
-  Free Tier stammen aus früheren Fassungen dieser README und sind ungeprüft.
+- Artikel pro Call sind **nicht plangebunden**. Gemessen am 14.8.2026 auf dem
+  Free Tier: `number=50` lieferte 50 Artikel, `number=100` lieferte 100, beide
+  HTTP 200 (jeweils `available: 13037`). Frühere Fassungen dieser README
+  nannten eine Deckelung bei 10 für den Free Tier — das war der Default
+  dieses Servers (`DEFAULT_RESULTS`), verwechselt mit einem Limit der Quelle.
 
 Der TTL-Cache (v0.2+) reduziert redundante API-Calls um bis zu 80%.
 
