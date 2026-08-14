@@ -81,11 +81,27 @@ unterscheiden, und ein Vergleich der Antworten.
 | `name` | `/search-news-sources` | `srf` -> 1 Quelle, `gibtsnichtxyz` -> 0 | wirkt |
 | `date` | `/top-news` | zwei Daten -> andere Schlagzeilen | wirkt |
 
-**Nicht einzeln gemessen:** `text`, `language`, `source-country`.
-Sie stehen in jeder Basisabfrage und sind damit nicht gegen eine
-Variante ohne sie geprueft. Dass die Suche ueberhaupt thematisch
-passende deutschsprachige Treffer liefert, ist ein Indiz, kein
-Beleg.
+Nachgereicht am selben Tag, gegen je einen anderen Wert — diese drei
+stehen in jeder Basisabfrage und waren deshalb zunaechst nicht gegen
+eine Variante ohne sie geprueft:
+
+| Parameter | Messung | Ergebnis |
+|---|---|---|
+| `text` | `Schule` (available 7057) vs `Bundesrat` (1316) | wirkt |
+| `language` | `de` (7057) vs `fr` (1) | wirkt |
+| `source-country` | `ch` (44) vs `at` (587) | wirkt |
+
+Damit sind alle elf Query-Parameter, die die Werkzeuge bauen,
+differenziell belegt.
+
+Zu `source-country` eine Beobachtung, die taeuschen koennte: Die fuenf
+IDs der `at`-Abfrage sind dieselben wie die der ungefilterten
+`language=de`-Abfrage. Wirkungslos ist der Parameter trotzdem nicht —
+`available` faellt von 7057 auf 587. Waere er ignoriert worden, muesste
+auch `available` unveraendert bleiben. Die vorderen Treffer der
+deutschsprachigen Suche stammen offenbar ohnehin aus Oesterreich.
+Genau deshalb vergleicht die Messung `available` **und** IDs: Auf die
+IDs allein gestuetzt haette dieser Fall wie «ohne Wirkung» ausgesehen.
 
 **Befund `/retrieve-front-page`:**
 
