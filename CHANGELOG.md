@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hinzugefuegt (Live-Abdeckung der Filter)
+
+- **`tests/test_live_parameter.py` — wirken die Filter der Quelle noch?**
+  Am 2026-08-14 gemessen: Die Quelle verwirft unbekannte Query-Parameter
+  **still** und antwortet mit 200. Eine Umbenennung auf ihrer Seite oder ein
+  Tippfehler macht einen Filter damit wirkungslos, ohne dass etwas rot wird —
+  die Antwort ist dann vollstaendig, plausibel, formatiert und ungefiltert.
+  Die uebrigen Live-Tests fangen das nicht: Sie pruefen, dass Artikel
+  zurueckkommen, und ein ignorierter Filter liefert Artikel.
+
+  Zwei Zusicherungen, getrennt gehalten: die Kontrolle (ein erfundener
+  Parameter aendert nichts — faellt sie, hat die Quelle ihr Verhalten
+  geaendert, und der Test darunter gehoert neu eingeordnet) und die Wirkung
+  (`categories=politics` und `categories=sports` liefern Verschiedenes).
+
+  Beide pruefen vorher, dass ueberhaupt Treffer da sind. Genau das fehlte beim
+  ersten Messversuch: Das Zeitfenster lag ausserhalb dessen, was der Tarif
+  liefert, beide Seiten kamen leer, und «leer == leer» las sich als bestandene
+  Kontrolle.
+
+  Gegenprobe auf echter CI gefahren: Mit zwei identischen Seiten faellt die
+  Zusicherung wie erwartet, sie ist also nicht tautologisch. Die drei
+  Hilfszusicherungen (Belastbarkeitspruefung, Fenstergrenzen) laufen offline
+  in jeder CI und wurden einzeln neutralisiert.
+
+  Kosten: vier zusaetzliche Anfragen pro Lauf.
+
 ### Behoben (erster Live-Lauf mit Schluessel, 2026-08-14)
 
 - **Jede Standardsuche lief in einen HTTP 400.** `SearchNewsInput.sort` stand
