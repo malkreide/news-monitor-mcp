@@ -41,6 +41,77 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # ===== PROBE — wird vor dem PR wieder entfernt =====
+      # Wirken die Query-Parameter, die die Werkzeuge bauen? Ein HTTP 200
+      # beantwortet das NICHT: Verwirft die Quelle unbekannte Parameter still,
+      # sieht ein wirkungsloser Filter genauso aus wie ein wirksamer. Genau so
+      # waren in `global-education-mcp` zwei Filter tot.
+      #
+      # Deshalb zuerst die KONTROLLE mit einem erfundenen Parameter. Erst wenn
+      # feststeht, wie die Quelle darauf reagiert, sagen die Messungen darunter
+      # ueberhaupt etwas.
+      - name: PROBE — wirken die Parameter?
+        env:
+          K: ${{ secrets.WORLD_NEWS_API_KEY }}
+        run: |
+          set -uo pipefail
+          B="https://api.worldnewsapi.com"
+          # Festes Zeitfenster: Ohne das koennten zwei Antworten schon deshalb
+          # verschieden sein, weil zwischendurch ein Artikel erschienen ist —
+          # und «wirkt» waere von «Rauschen» nicht zu unterscheiden.
+          W="earliest-publish-date=2026-07-01%2000:00:00&latest-publish-date=2026-07-31%2023:59:59"
+          q() { curl -s -H "x-api-key: $K" "$1"; }
+          sig() { jq -c '{available, ids: [.news[]?.id]}' 2>/dev/null || echo FEHLER; }
+
+          vgl() { # $1 Label, $2 URL-A, $3 URL-B
+            a=$(q "$2" | sig); b=$(q "$3" | sig)
+            if [ "$a" = "$b" ]; then echo "  $1: GLEICH -> Parameter ohne Wirkung"
+            else echo "  $1: VERSCHIEDEN -> Parameter wirkt"; fi
+            echo "      A=$(echo "$a" | head -c 110)"
+            echo "      B=$(echo "$b" | head -c 110)"
+          }
+
+          echo "== KONTROLLE: verwirft die Quelle unbekannte Parameter still? =="
+          BASIS="$B/search-news?text=Schule&language=de&number=3&$W"
+          vgl "erfundener Parameter" "$BASIS" "$BASIS&gibtsnichtxyz=quatsch"
+
+          echo "== categories (news_trend_radar) =="
+          C="$B/search-news?language=de&source-country=ch&number=3&$W"
+          vgl "politics vs sports" "$C&categories=politics" "$C&categories=sports"
+
+          echo "== sort-direction (alle Such-Werkzeuge) =="
+          S="$B/search-news?text=Schule&language=de&number=3&sort=publish-time&$W"
+          vgl "ASC vs DESC" "$S&sort-direction=ASC" "$S&sort-direction=DESC"
+
+          echo "== /search-news-sources: name =="
+          for n in srf gibtsnichtxyz; do
+            printf "  name=%-14s -> " "$n"
+            q "$B/search-news-sources?name=$n" | head -c 220; echo
+          done
+
+          echo "== /retrieve-front-page =="
+          printf "  source-country=ch -> "
+          q "$B/retrieve-front-page?source-country=ch" | head -c 220; echo
+
+          echo "== /top-news: date =="
+          T="$B/top-news?source-country=ch&language=de"
+          for d in 2026-07-15 2026-08-13; do
+            printf "  date=%s -> " "$d"
+            q "$T&date=$d" | jq -c '{n: (.top_news|length), erste: (.top_news[0].news[0].title // "-")}' 2>/dev/null \
+              | head -c 160 || echo "kein JSON"
+            echo
+          done
+
+          echo "== /retrieve-news: ids =="
+          ID=$(q "$BASIS" | jq -r '.news[0].id // empty')
+          echo "  ID aus der Suche: ${ID:-KEINE}"
+          if [ -n "$ID" ]; then
+            printf "  ids=%s -> " "$ID"
+            q "$B/retrieve-news?ids=$ID" | jq -c '{gefunden: (.news|length), id: .news[0].id}' 2>/dev/null \
+              | head -c 160 || echo "kein JSON"
+            echo
+          fi
+
       - name: Live-Tests gegen die echte Quelle
         id: pytest
         run: pytest tests/ -m live -v --junitxml=live-report.xml
