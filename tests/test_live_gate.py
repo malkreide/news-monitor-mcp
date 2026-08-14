@@ -87,3 +87,28 @@ def test_ein_fehlgeschlagener_test_bleibt_sichtbar(tmp_path):
     ergebnis = _lauf(_bericht(tmp_path / "r.xml", tests=5, skipped=0, failures=2))
     assert ergebnis.returncode == 0, ergebnis.stdout
     assert "fehlgeschlagen: **2**" in ergebnis.stdout
+
+
+def test_uebersprungene_nennen_ihren_grund(tmp_path):
+    """Die Zusammenfassung nennt den gemeldeten Grund, statt ihn zu raten.
+
+    Vorher stand dort pauschal «ohne `WORLD_NEWS_API_KEY` ist nur der
+    Routenbestand geprueft». Seit ein erschoepftes Kontingent ebenfalls
+    ueberspringt (siehe `tests/kontingent.py`), waere das eine falsche
+    Diagnose — und eine falsche Diagnose im Job-Summary ist schlechter als
+    keine, weil ihr jemand glaubt und am falschen Ort sucht.
+    """
+    pfad = tmp_path / "r.xml"
+    pfad.write_text(
+        '<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" '
+        'tests="3" skipped="2" failures="0" errors="0">'
+        '<testcase name="a"><skipped message="Budget der Quelle erreicht (HTTP 402)"/></testcase>'
+        '<testcase name="b"><skipped message="WORLD_NEWS_API_KEY nicht gesetzt"/></testcase>'
+        '<testcase name="c"/>'
+        "</testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    ergebnis = _lauf(pfad)
+    assert ergebnis.returncode == 0, ergebnis.stdout
+    assert "Budget der Quelle erreicht (HTTP 402)" in ergebnis.stdout, ergebnis.stdout
+    assert "WORLD_NEWS_API_KEY nicht gesetzt" in ergebnis.stdout, ergebnis.stdout

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Geaendert (erschoepftes Kontingent ist kein Defekt)
+
+- **Ein leeres Budget meldete rot wie ein Schemawechsel.** Am 14.8.2026 lief
+  der Free-Tier-Schluessel waehrend einer Messreihe leer; die Live-Tests
+  meldeten `HTTP 402 — API-Kontingent erschoepft`. Der Meldeweg des geplanten
+  Laufs haette daraus ein Issue mit dem Titel «die Quelle antwortet nicht mehr
+  wie erwartet» gemacht. Falsch, und schlimmer als keine Meldung: Wer ihr
+  glaubt, sucht am falschen Ort.
+
+  Dieses Repo trennt das an anderer Stelle schon: Ohne `WORLD_NEWS_API_KEY`
+  ueberspringen sich die Datentests. Ein erschoepftes Budget gehoert in
+  dieselbe Kategorie — es sagt etwas ueber unser Konto aus, nichts ueber die
+  Quelle. Neu ueberspringen 402 und 429 (`tests/kontingent.py`).
+
+  Eng abgegrenzt: 401 bleibt rot (ein ungueltiger Schluessel ist ein Defekt
+  der Konfiguration), alles andere sowieso. `API-Fehler: HTTP 400` — der echte
+  Befund vom selben Tag — steht als Testfall dagegen.
+
+- **Der Waechter raet den Grund nicht mehr.** `scripts/check_live_run.py`
+  schrieb pauschal «ohne `WORLD_NEWS_API_KEY` ist nur der Routenbestand
+  geprueft». Seit auch ein Budget ueberspringt, waere das eine falsche
+  Diagnose. Er liest die gemeldeten Gruende jetzt aus dem JUnit-Bericht und
+  listet sie auf.
+
+
 ### Hinzugefuegt (Live-Abdeckung der Filter)
 
 - **`tests/test_live_parameter.py` — wirken die Filter der Quelle noch?**

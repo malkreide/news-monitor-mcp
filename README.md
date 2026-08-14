@@ -261,7 +261,7 @@ PYTHONPATH=src pytest tests/ -m "live"
 PYTHONPATH=src python scripts/record_fixtures.py
 ```
 
-**154 tests** — 147 offline, 7 live (2 of which need no API key).
+**173 tests** — 166 offline, 7 live (2 of which need no API key).
 
 The live tests run daily at 06:17 UTC via
 [`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml), not on

@@ -48,10 +48,20 @@ def main(argv: list[str]) -> int:
     suites = wurzel.iter("testsuite") if wurzel.tag == "testsuites" else [wurzel]
 
     gesamt = uebersprungen = fehlgeschlagen = 0
+    gruende: list[str] = []
     for suite in suites:
         gesamt += int(suite.get("tests", 0))
         uebersprungen += int(suite.get("skipped", 0))
         fehlgeschlagen += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+        # Warum uebersprungen wurde, steht im Bericht. Frueher stand hier statt
+        # dessen die Vermutung «dann fehlt wohl der Schluessel» — seit ein
+        # erschoepftes Kontingent ebenfalls ueberspringt, waere das schlicht
+        # falsch. Ein Waechter, der den Grund raet, ist keiner.
+        for fall in suite.iter("testcase"):
+            for skip in fall.iter("skipped"):
+                text = (skip.get("message") or "").strip()
+                if text and text not in gruende:
+                    gruende.append(text)
 
     gelaufen = gesamt - uebersprungen
 
@@ -84,10 +94,16 @@ def main(argv: list[str]) -> int:
 
     if uebersprungen:
         zeilen.append(
-            f"::warning::{uebersprungen} von {gesamt} Live-Tests uebersprungen. Ohne "
-            "`WORLD_NEWS_API_KEY` ist nur der Routenbestand geprueft, nicht die Form "
-            "der Antwort — ein Schemawechsel faellt so nicht auf."
+            f"::warning::{uebersprungen} von {gesamt} Live-Tests uebersprungen — "
+            "die Form der Antwort ist damit nicht gemessen, ein Schemawechsel "
+            "faellt so nicht auf."
         )
+        zeilen.append("")
+        zeilen.append("Gemeldete Gruende:")
+        if gruende:
+            zeilen.extend(f"- {g}" for g in gruende)
+        else:
+            zeilen.append("- *(keiner im Bericht — pytest hat den Grund nicht mitgeschrieben)*")
 
     _summary(zeilen)
     return 0
