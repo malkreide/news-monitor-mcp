@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben (erster Live-Lauf mit Schluessel, 2026-08-14)
+
+- **Jede Standardsuche lief in einen HTTP 400.** `SearchNewsInput.sort` stand
+  auf `SortOrder.RELEVANCE`, und `news_search` schickte diesen Wert mit. Die
+  Quelle quittiert das mit `{"code":400,"message":"Sort must be either
+  'publish-time' or empty."}`. Leer *ist* dort die Relevanz-Sortierung, der
+  Parameter gehoert also weggelassen statt uebersetzt.
+
+  Gemessen, nicht geschlossen: dieselbe Anfrage mit `sort=publish-time` und
+  ohne `sort` -> HTTP 200, mit `sort=relevance` -> 400, auch mit Datumsbereich.
+  Der Datumsbereich war nicht die Ursache.
+
+  Alle Unit-Tests waren gruen, weil sie die Quelle mocken und die Antwort
+  zurueckbekommen, die sie selbst hinterlegt haben. `tests/test_sortparameter.py`
+  prueft deshalb nicht das Ergebnis, sondern **was rausgeht**.
+
+- **Ein Test riss den naechsten mit.** `api_client._client` ist modulweit; unter
+  `asyncio_mode = "auto"` bekommt jeder Test eine eigene Event-Loop, erbte aber
+  den Client des vorigen und starb beim Verbindungsabbau mit `RuntimeError:
+  Event loop is closed`. Getroffen hat es nicht den Verursacher, sondern
+  `test_live_top_news_schweiz` — dessen Route im selben Lauf von Hand HTTP 200
+  lieferte. Neu raeumt eine autouse-Fixture in `tests/conftest.py` den Slot vor
+  und nach jedem Test.
+
+  Sichtbar wurde das erst jetzt: Solange die schluesselpflichtigen Tests sich
+  uebersprangen, teilten sich nie zwei Tests einen Client.
+
 ### Behoben (Meldeweg des Live-Workflows)
 
 - **Der Melde-Schritt brach ab, statt zu melden.** `export TITEL=...` gesetzt,
