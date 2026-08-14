@@ -85,5 +85,5 @@ jobs:
           if [ -n "$nummer" ]; then
             gh issue comment "$nummer" --body "$text"
           else
-            gh issue create --title "$titel" --label live-tests --body "$text"
+            gh issue create --title "$TITEL" --label live-tests --body "$text"
           fi
