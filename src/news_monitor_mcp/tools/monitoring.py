@@ -20,6 +20,7 @@ from news_monitor_mcp.app import _cache, mcp
 from news_monitor_mcp.errors import _handle_api_error, _no_key_message
 from news_monitor_mcp.formatting import (
     ResponseFormat,
+    SortOrder,
     _calc_avg_sentiment,
     _format_article,
     _format_articles_markdown,
@@ -80,9 +81,18 @@ async def news_search(params: SearchNewsInput) -> str:
         p: dict[str, Any] = {
             "text": params.query,
             "number": params.number,
-            "sort": params.sort.value,
             "sort-direction": "DESC",
         }
+        # `relevance` quittiert die Quelle mit HTTP 400: «Sort must be either
+        # 'publish-time' or empty.» Leer *ist* ihre Relevanz-Sortierung — der
+        # Parameter gehoert also weggelassen, nicht uebersetzt.
+        #
+        # Das war kein Testproblem: `SortOrder.RELEVANCE` ist der Default von
+        # `SearchNewsInput.sort`, jede Standardsuche lief damit in den 400. Alle
+        # Unit-Tests blieben gruen, weil sie die Quelle mocken — gesehen hat es
+        # erst der erste Live-Lauf mit Schluessel (2026-08-14).
+        if params.sort is not SortOrder.RELEVANCE:
+            p["sort"] = params.sort.value
         if params.language:
             p["language"] = params.language
         if params.source_country:
