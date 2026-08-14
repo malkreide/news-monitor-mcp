@@ -78,3 +78,14 @@ Zwei der fünf prüfen den Routenbestand und brauchen keinen Schlüssel, drei
 gesetzt, läuft nur die halbe Messung — `scripts/check_live_run.py` macht das
 im Job-Summary sichtbar und meldet rot, wenn ein Lauf **gar nichts** gemessen
 hat (übersprungen ≠ geprüft, und pytest gibt für beides Exit-Code 0 zurück).
+
+Stand 14.8.2026 ist das Secret **nicht gesetzt**: gemessen 2 ausgeführt, 3
+übersprungen, Job grün. Der tägliche Lauf prüft damit nur den Routenbestand,
+nicht die Form der Antwort — ein Schemawechsel bei der Quelle fällt so nicht
+auf, also genau der Fehler, gegen den die Live-Tests existieren.
+
+Den Meldeweg bei Fehlschlag kann `workflow_dispatch` nicht prüfen: der Schritt
+hängt an `failure() && github.event_name == 'schedule'` und wird bei jedem
+manuellen Lauf übersprungen. Wer ihn testen will, provoziert einen roten Lauf
+auf einem Wegwerf-Branch — beide Zweige, denn `create` und `comment` fallen
+getrennt (`tests/test_meldeweg.py` hält sie gefahren).
