@@ -41,6 +41,29 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # ===== PROBE — wird vor dem PR wieder entfernt =====
+      # Gegenprobe zur Live-Zusicherung. Offline laesst sie sich nicht
+      # neutralisieren: Die "Implementierung", die sie prueft, ist das Verhalten
+      # der Quelle. Nachweisbar ist aber, dass die Zusicherung ueberhaupt
+      # fallen KANN — mit zwei identischen Seiten muss sie fehlschlagen. Bleibt
+      # sie dabei gruen, prueft sie nichts.
+      - name: PROBE — kann der neue Live-Test fallen?
+        env:
+          PYTHONPATH: src
+          WORLD_NEWS_API_KEY: ${{ secrets.WORLD_NEWS_API_KEY }}
+        run: |
+          set -uo pipefail
+          cp tests/test_live_parameter.py /tmp/lp.bak
+          sed -i 's/categories="sports"/categories="politics"/' tests/test_live_parameter.py
+          echo "Beide Seiten jetzt categories=politics — der Test MUSS fallen."
+          if pytest tests/test_live_parameter.py -m live -k categories -q; then
+            echo "::error::Der Test bleibt gruen, obwohl beide Seiten identisch sind."
+            cp /tmp/lp.bak tests/test_live_parameter.py
+            exit 1
+          fi
+          echo "OK — die Zusicherung faellt wie erwartet."
+          cp /tmp/lp.bak tests/test_live_parameter.py
+
       - name: Live-Tests gegen die echte Quelle
         id: pytest
         run: pytest tests/ -m live -v --junitxml=live-report.xml
