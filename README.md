@@ -21,7 +21,7 @@
 
 **Source:** WorldNewsAPI (worldnewsapi.com) — the only freely available news API with German-language sentiment analysis.
 
-**API key required.** Get a free key at [worldnewsapi.com/console](https://worldnewsapi.com/console/) (1,000 calls/month free tier).
+**API key required.** Get a free key at [worldnewsapi.com/console](https://worldnewsapi.com/console/) — free plan: 50 points/day, no credit card, backlink to worldnewsapi.com required (checked 2026-08-14).
 
 **Anchor demo query:**
 *"How has the Schulamt Zürich been portrayed in the media over the last 30 days, and what is the overall sentiment?"*
@@ -394,10 +394,22 @@ in-memory cache). None of the 15 tools modify any external data source.
 
 | Constraint | WorldNewsAPI Free Tier | Paid Plans |
 |---|---|---|
-| Calls/month | 1,000 | Up to 1M |
+| Quota | 50 points/day | 500 – 50,000 points/day |
 | Articles/call | 10 | Up to 100 |
 | Historical depth | 30 days | Extended |
 | Timeout per call | 30 seconds | 30 seconds |
+
+Quotas checked against [worldnewsapi.com/pricing](https://worldnewsapi.com/pricing/)
+on **2026-08-14**. Undated, a quota is indistinguishable from a guess after a
+year. Two caveats worth knowing before you plan around this table:
+
+- The API bills in **points, not calls.** What a request costs depends on the
+  endpoint and its options, so there is no fixed "calls per day" figure — the
+  earlier claim of 1,000 calls/month was both the wrong unit and the wrong
+  magnitude.
+- The articles-per-call split is **not stated per plan** in the public docs,
+  which only give `number` ≤ 100 per request. The value of 10 for the free
+  plan is inherited from earlier versions of this README and unverified.
 
 The TTL cache (v0.2+) reduces redundant calls by up to 80%.
 
