@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben (Meldeweg des Live-Workflows)
+
+- **Der Melde-Schritt brach ab, statt zu melden.** `export TITEL=...` gesetzt,
+  aber `gh issue create --title "$titel"` verwendet — unter `set -euo pipefail`
+  ist das `titel: unbound variable`, Exit-Code 1, bevor ein Issue entsteht. Der
+  Schritt laeuft nur bei einem roten Lauf und war damit der einzige Teil des
+  Workflows, den nie jemand ausgefuehrt hatte; aufgefallen waere es erst beim
+  ersten echten Fehlschlag, also genau dann, wenn man sich darauf verlaesst.
+
+- **`tests/test_meldeweg.py` haelt den Zweig gefahren.** Faehrt den Shell-Block
+  aus dem Workflow (nicht eine Kopie davon) gegen einen `gh`-Stub, der `--jq`
+  mit echtem `jq` anwendet: kein offenes Issue -> `create`, passendes offenes
+  Issue -> `comment`, fremdes Issue -> trotzdem `create`. Der Fehler oben laesst
+  zwei der drei Tests fallen.
+
 ### Hinzugefuegt
 
 - **Geplanter Live-Test-Workflow (DRIFT-005).** Die Live-Tests waren nur per
