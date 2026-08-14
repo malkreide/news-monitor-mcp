@@ -47,6 +47,9 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
     "ruff>=0.4.0",
+    # Nur fuer tests/test_meldeweg.py: liest den Shell-Block aus dem
+    # Live-Test-Workflow, damit der Test das Original prueft und keine Kopie.
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
