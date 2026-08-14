@@ -35,6 +35,7 @@ from datetime import date, timedelta
 import pytest
 
 from news_monitor_mcp.api_client import BASE_URL, articles_of
+from tests.kontingent import ueberspringe_bei_budget_status
 
 _ohne_key = pytest.mark.skipif(
     not os.environ.get("WORLD_NEWS_API_KEY"),
@@ -72,6 +73,10 @@ async def _suche(**zusatz) -> tuple[object, list]:
             params=p,
             headers={"x-api-key": os.environ["WORLD_NEWS_API_KEY"]},
         )
+    # Vor `raise_for_status`: Ein aufgebrauchtes Kontingent ist kein Defekt der
+    # Quelle und darf diesen Lauf nicht rot melden — er hat dann schlicht nichts
+    # gemessen. Alle anderen Statuscodes bleiben ein Fehlschlag.
+    ueberspringe_bei_budget_status(r.status_code)
     r.raise_for_status()
     daten = r.json()
     # `articles_of` statt `.get("news", [])`: Ein fehlender Umschlag ist keine

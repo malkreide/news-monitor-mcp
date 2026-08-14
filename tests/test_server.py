@@ -28,6 +28,7 @@ from news_monitor_mcp.server import (
     news_top_headlines,
     news_trend_radar,
 )
+from tests.kontingent import ueberspringe_bei_budget_antwort
 
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen Tests
@@ -346,6 +347,7 @@ async def test_live_search_schweizer_news():
     """Sucht echte Schweizer News und prueft, dass Artikel zurueckkommen."""
     params = SearchNewsInput(query="Volksschule", language="de", source_country="ch", number=3)
     result = await news_search(params)
+    ueberspringe_bei_budget_antwort(result)
     assert "Kein API-Key" not in result
     assert "Fehler" not in result, result[:300]
     # Eine leere Trefferliste ist etwas anderes als eine Trefferliste, und
@@ -364,6 +366,7 @@ async def test_live_top_news_schweiz():
     """Ruft echte Top-News der Schweiz ab."""
     params = TopNewsInput(source_country="ch", language="de", number=5)
     result = await news_top_headlines(params)
+    ueberspringe_bei_budget_antwort(result)
     assert "Kein API-Key" not in result
     assert "Fehler" not in result, result[:300]
     # `Top-Schlagzeilen` ist die eigene Ueberschrift und belegt nichts.
@@ -381,6 +384,7 @@ async def test_live_sentiment_ki_bildung():
         source_country="ch,de,at",
     )
     result = await news_sentiment_monitor(params)
+    ueberspringe_bei_budget_antwort(result)
     assert "Kein API-Key" not in result
     assert "Fehler" not in result, result[:300]
     # Ein Sentiment ist eine Zahl. «Sentiment» allein stand auch in der
