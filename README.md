@@ -47,7 +47,7 @@
 | 4 | `news_media_briefing` | Multi-topic weekly briefing report |
 | 5 | `news_retrieve_article` | Fetch full article by ID |
 | 6 | `news_search_sources` | Find available news sources by name/country |
-| 7 | `news_front_pages` | Digital newspaper front pages |
+| 7 | `news_front_pages` | Digital newspaper front pages — **paid plan required**, see below |
 | 8 | `news_trend_radar` | Category-based trend detection per country |
 | 9 | `news_geo_search` | Location-specific news search |
 | 10 | `news_alert_create` | Create a persistent alert (sentiment / volume / keyword) |
@@ -407,6 +407,9 @@ year. Two caveats worth knowing before you plan around this table:
   endpoint and its options, so there is no fixed "calls per day" figure — the
   earlier claim of 1,000 calls/month was both the wrong unit and the wrong
   magnitude.
+- `news_front_pages` does **not work on the free plan.** Measured 2026-08-14:
+  `/retrieve-front-page` answers `HTTP 403 — This endpoint is not available on
+  the free plan.` The other 14 tools were reachable on the free key.
 - Articles per call is **not plan-dependent**. Measured 2026-08-14 on the free
   plan: `number=50` returned 50 articles, `number=100` returned 100, both
   HTTP 200 (`available: 13037` in each case). Earlier versions of this README

@@ -47,7 +47,7 @@
 | 4 | `news_media_briefing` | Multi-Themen-Wochenbericht |
 | 5 | `news_retrieve_article` | Vollständigen Artikel per ID abrufen |
 | 6 | `news_search_sources` | Nachrichtenquellen nach Name/Land suchen |
-| 7 | `news_front_pages` | Digitale Zeitungscovers |
+| 7 | `news_front_pages` | Digitale Zeitungscovers — **Bezahlplan nötig**, siehe unten |
 | 8 | `news_trend_radar` | Kategorie-basierte Trenderkennung pro Land |
 | 9 | `news_geo_search` | Standortspezifische Nachrichtensuche |
 | 10 | `news_alert_create` | Persistenten Alert erstellen (Sentiment / Volume / Keyword) |
@@ -406,6 +406,10 @@ Tabelle plant:
   hängt vom Endpunkt und seinen Optionen ab; eine feste Zahl «Calls pro Tag»
   gibt es deshalb nicht — die frühere Angabe «1'000 Calls/Monat» war die
   falsche Einheit *und* die falsche Grössenordnung.
+- `news_front_pages` funktioniert auf dem **Free Tier nicht.** Gemessen am
+  14.8.2026: `/retrieve-front-page` antwortet mit `HTTP 403 — This endpoint is
+  not available on the free plan.` Die übrigen 14 Tools waren mit dem
+  Free-Tier-Schlüssel erreichbar.
 - Artikel pro Call sind **nicht plangebunden**. Gemessen am 14.8.2026 auf dem
   Free Tier: `number=50` lieferte 50 Artikel, `number=100` lieferte 100, beide
   HTTP 200 (jeweils `available: 13037`). Frühere Fassungen dieser README
