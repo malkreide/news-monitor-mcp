@@ -21,7 +21,7 @@
 
 **Quelle:** WorldNewsAPI (worldnewsapi.com) — die einzige frei zugängliche News-API mit deutschsprachiger Sentiment-Analyse.
 
-**API-Schlüssel erforderlich.** Kostenloser Key unter [worldnewsapi.com/console](https://worldnewsapi.com/console/) (1'000 Calls/Monat im Free Tier).
+**API-Schlüssel erforderlich.** Kostenloser Key unter [worldnewsapi.com/console](https://worldnewsapi.com/console/) — Free Tier: 50 Punkte/Tag, ohne Kreditkarte, Backlink auf worldnewsapi.com erforderlich (geprüft am 14.8.2026).
 
 **Anker-Demo-Abfrage:**
 *«Wie wurde das Schulamt Zürich in den letzten 30 Tagen in den Medien dargestellt, und wie ist das Gesamt-Sentiment?»*
@@ -392,10 +392,23 @@ Die 3 Ausnahmen sind lokale Operationen: `news_alert_create` und `news_alert_del
 
 | Einschränkung | WorldNewsAPI Free Tier | Kostenpflichtige Pläne |
 |---|---|---|
-| Calls/Monat | 1'000 | Bis 1M |
+| Kontingent | 50 Punkte/Tag | 500 – 50'000 Punkte/Tag |
 | Artikel/Call | 10 | Bis 100 |
 | Historische Tiefe | 30 Tage | Erweitert |
 | Timeout pro Call | 30 Sekunden | 30 Sekunden |
+
+Kontingente geprüft gegen [worldnewsapi.com/pricing](https://worldnewsapi.com/pricing/)
+am **14.8.2026**. Ohne Datum ist ein Kontingent nach einem Jahr von einer
+Vermutung nicht mehr zu unterscheiden. Zwei Vorbehalte, bevor jemand mit dieser
+Tabelle plant:
+
+- Abgerechnet wird in **Punkten, nicht in Calls.** Was eine Anfrage kostet,
+  hängt vom Endpunkt und seinen Optionen ab; eine feste Zahl «Calls pro Tag»
+  gibt es deshalb nicht — die frühere Angabe «1'000 Calls/Monat» war die
+  falsche Einheit *und* die falsche Grössenordnung.
+- Die Aufteilung Artikel/Call ist in der öffentlichen Doku **nicht nach Plan
+  ausgewiesen**; dort steht nur `number` ≤ 100 pro Request. Die 10 für den
+  Free Tier stammen aus früheren Fassungen dieser README und sind ungeprüft.
 
 Der TTL-Cache (v0.2+) reduziert redundante API-Calls um bis zu 80%.
 
