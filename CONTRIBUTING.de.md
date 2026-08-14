@@ -50,7 +50,10 @@ PYTHONPATH=src pytest tests/ -m "not live"
 WORLD_NEWS_API_KEY=dein-key PYTHONPATH=src pytest tests/ -m "live"
 ```
 
-Live-Tests sind mit `@pytest.mark.live` markiert und werden in der CI-Pipeline ausgeschlossen.
+Live-Tests sind mit `@pytest.mark.live` markiert und werden in der Push-/PR-CI
+ausgeschlossen. Stattdessen laufen sie geplant — täglich um 06:17 UTC über
+[`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml), der sich
+per `workflow_dispatch` auch von Hand starten lässt.
 
 ---
 

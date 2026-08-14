@@ -254,7 +254,11 @@ PYTHONPATH=src pytest tests/ -m "live"
 PYTHONPATH=src python scripts/record_fixtures.py
 ```
 
-**135 Tests** — 130 offline, 5 live (zwei davon ohne API-Key).
+**140 Tests** — 135 offline, 5 live (zwei davon ohne API-Key).
+
+Die Live-Tests laufen täglich um 06:17 UTC über
+[`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml), nicht
+pro Push: Sie messen die Quelle, und die ändert sich unabhängig von diesem Repo.
 
 ### Drei Live-Tests liefen nie
 

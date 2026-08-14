@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hinzugefuegt
+
+- **Geplanter Live-Test-Workflow (DRIFT-005).** Die Live-Tests waren nur per
+  `-m "not live"` aus der CI ausgeschlossen und liefen damit nirgends
+  automatisch — ein Schemawechsel bei der Quelle fiel erst auf, wenn jemand von
+  Hand `pytest -m live` fuhr. `.github/workflows/live-tests.yml` faehrt sie
+  jetzt taeglich um 06:17 UTC, zusaetzlich per `workflow_dispatch`. Schlaegt
+  ein geplanter Lauf fehl, oeffnet der Workflow ein Issue oder kommentiert das
+  offene: Ein Cron-Lauf hat kein Publikum, auf dem ein rotes Kreuz auffiele.
+
+- **`scripts/check_live_run.py` — Nachweis, dass ein Lauf etwas gemessen hat.**
+  Ueberspringt pytest jeden Test, ist der Exit-Code 0; ein geplanter Lauf ohne
+  Messung saehe dann aus wie einer, der alles geprueft hat. Das Skript meldet
+  rot, wenn kein Live-Test gesammelt wurde (die Markierung greift nicht mehr)
+  oder wenn jeder gesammelte uebersprungen wurde — auch die Routenpruefung, die
+  keinen Schluessel braucht. Ein Teil-Skip ohne `WORLD_NEWS_API_KEY` bleibt
+  gruen, wird aber als Warnung in die Job-Zusammenfassung geschrieben.
+
 ### Behoben
 
 - **Drei Live-Tests liefen ueberhaupt nie.** Sie trugen `@pytest.mark.live`,

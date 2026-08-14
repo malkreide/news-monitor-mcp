@@ -68,10 +68,13 @@ Dazu der Job `docker`: Image bauen, dann `--help` aus dem Image und der
 Nachweis, dass der Container ohne `MCP_BEARER_TOKEN` mit Exit-Code 2 abbricht.
 Test-Matrix: Python 3.11 / 3.12 / 3.13.
 
-**Live-Tests:** Es gibt **keinen cron-getriggerten Workflow**. Die einzigen
-Zeitpläne unter `.github/` stehen in `dependabot.yml`. Live-Tests
-(`@pytest.mark.live`, sechs Stück in `tests/test_server.py`) sind in der CI
-nur per `-m "not live"` ausgeschlossen und laufen damit nirgends automatisch.
-→ **Befund: DRIFT-005** (5 von 10 geprüften Servern verletzen ihn). Ein
-Schemawechsel bei `api.worldnewsapi.com` fällt hier erst auf, wenn jemand von
-Hand `pytest -m live` fährt.
+**Live-Tests:** `.github/workflows/live-tests.yml` fährt die fünf
+`@pytest.mark.live`-Tests täglich um 06:17 UTC (plus `workflow_dispatch`) —
+DRIFT-005 ist damit geschlossen. Die reguläre CI schliesst sie weiterhin per
+`-m "not live"` aus; das ist richtig so, sie messen die Quelle, nicht den Diff.
+
+Zwei der fünf prüfen den Routenbestand und brauchen keinen Schlüssel, drei
+überspringen sich ohne `WORLD_NEWS_API_KEY`. Ist das Secret im Repo nicht
+gesetzt, läuft nur die halbe Messung — `scripts/check_live_run.py` macht das
+im Job-Summary sichtbar und meldet rot, wenn ein Lauf **gar nichts** gemessen
+hat (übersprungen ≠ geprüft, und pytest gibt für beides Exit-Code 0 zurück).
