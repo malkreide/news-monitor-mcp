@@ -57,6 +57,30 @@ per `workflow_dispatch` auch von Hand starten lässt.
 
 ---
 
+## Die Live-Suite: wann sie läuft, und wer ein rotes Ergebnis sieht
+
+**Kadenz:** täglich 06:17 UTC, dazu jederzeit von Hand über *Actions → Live-Tests (geplant) → Run
+workflow*. Siehe [`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml).
+
+**Wer es sieht:** Ein roter Lauf öffnet ein Issue mit dem Titel `Live-Tests rot: die Quelle
+antwortet nicht mehr wie erwartet` und dem Label `live-tests` — und kommentiert
+das bestehende, statt ein zweites aufzumachen. Gemeldet wird nur bei geplanten
+Läufen, nicht bei einem Lauf von Hand.
+
+**Drei Antworten, nicht zwei.** `scripts/check_live_run.py` liest das JUnit-XML statt des
+Exit-Codes und unterscheidet: `clear` (gelaufen, grün), `finding` (gelaufen,
+etwas gefallen) und `unknown` (nicht gelaufen — Installation gescheitert, null
+Tests eingesammelt, alle übersprungen). Ein `unknown` schliesst nie ein Issue:
+Zuzumachen hiesse zu behaupten, der Vergleich sei gelaufen.
+
+**Ein roter Live-Lauf heisst nicht zwingend «unser Fehler».** Er heisst: Der
+Vertrag mit der Quelle hat sich geändert, oder die Quelle ist gerade aus. Beides
+gehört gesehen, nur das Erste gehört gefixt. Bitte den Lauf lesen, bevor der Job
+deaktiviert wird — so stirbt dieser Check, und er ist der einzige im Repo, der
+einer falschen Grundannahme über die überwachten Quellen widersprechen kann. Jeder andere Test
+prüft gegen eine Fixture, und die Fixture ist aus derselben Annahme geschrieben
+wie der Code.
+
 ## Lizenz
 
 MIT – siehe [LICENSE](LICENSE)

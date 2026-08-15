@@ -57,6 +57,28 @@ can also be started by hand with `workflow_dispatch`.
 
 ---
 
+## The live suite: when it runs, and who sees a red result
+
+**Cadence:** daily 06:17 UTC, plus on demand via *Actions → Live-Tests (geplant) → Run
+workflow*. See [`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml).
+
+**Who sees it:** a red run opens an issue titled `Live-Tests rot: die Quelle antwortet nicht mehr
+wie erwartet` with the `live-tests` label, and comments on the existing one
+instead of opening a second. Only scheduled runs report; a manual run does not.
+
+**Three answers, not two.** `scripts/check_live_run.py` reads the JUnit XML rather than
+the exit code and separates `clear` (ran, green), `finding` (ran, something
+fell) and `unknown` (did not run — install failed, nothing collected,
+everything skipped). An `unknown` never closes an issue: closing would claim a
+comparison that never happened.
+
+**A red live run does not necessarily mean *our* bug.** It means the contract
+with the source has changed, or the source is down. Both belong seen; only the
+first belongs fixed. Please read the run before disabling the job — that is how
+this check dies, and it is the only one in the repository that can contradict a
+wrong assumption about die überwachten Quellen. Every other test asserts against a fixture, and
+the fixture was written from the same assumption as the code.
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
