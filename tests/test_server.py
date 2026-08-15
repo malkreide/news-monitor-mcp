@@ -363,14 +363,36 @@ async def test_live_search_schweizer_news():
 @pytest.mark.live
 @_ohne_key
 async def test_live_top_news_schweiz():
-    """Ruft echte Top-News der Schweiz ab."""
+    """Ruft echte Top-News der Schweiz ab.
+
+    ZWEI ERGEBNISSE SIND RICHTIG, EINES NICHT. Am 15.8.2026 fiel dieser Test,
+    weil die Quelle fuer CH/de null Cluster fuehrte — gemessen:
+    `{"top_news":[],"language":"de","country":"ch"}`, HTTP 200. Das ist ihre
+    Antwort, kein Defekt: In kleinen Sprachraeumen ist leer in ruhigen Stunden
+    der Normalfall, und der geplante Lauf um 06:17 UTC trifft genau die.
+
+    Die Zusicherung akzeptiert deshalb beides — gerenderte Cluster oder die
+    ausdrueckliche Leer-Meldung des Werkzeugs. Das ist KEINE Disjunktion, die
+    immer wahr ist (der Fehler, den dieses Repo hier schon einmal hatte):
+    Beide Zweige sind eigene, benannte Zustaende, und die Faelle, um die es
+    geht, erzeugen keinen davon. Ein umbenannter Umschlag laesst
+    `clusters_of` werfen und endet in «Fehler: Unerwartete Antwortform» —
+    abgefangen von der Zusicherung darueber. Eine kaputte Formatierung liefert
+    nur die Ueberschrift und faellt hier durch.
+    """
     params = TopNewsInput(source_country="ch", language="de", number=5)
     result = await news_top_headlines(params)
     ueberspringe_bei_budget_antwort(result)
     assert "Kein API-Key" not in result
     assert "Fehler" not in result, result[:300]
     # `Top-Schlagzeilen` ist die eigene Ueberschrift und belegt nichts.
-    assert "###" in result or "Rang" in result, result[:300]
+    hat_cluster = "###" in result or "Rang" in result
+    sagt_leer = "keine Top-Cluster" in result
+    assert hat_cluster or sagt_leer, (
+        "Weder Cluster noch die Leer-Meldung — die Antwort besteht nur aus der "
+        "eigenen Ueberschrift. Das ist keine Aussage der Quelle, sondern ein "
+        f"Formatierungsfehler.\n{result[:300]}"
+    )
 
 
 @pytest.mark.live

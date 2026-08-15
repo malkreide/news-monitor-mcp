@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Behoben (/top-news las den Umschlag roh)
+
+- **Die letzte Stelle mit `data.get(..., [])`.** Sieben Abfragen liefen laengst
+  ueber `articles_of`; `/top-news` las `data.get("top_news", [])` und war beim
+  Umbau uebersehen worden. Der Ausdruck beantwortet «die Quelle fuehrt hier
+  gerade nichts» und «die Quelle antwortet anders» mit derselben leeren Liste.
+
+  Aufgefallen am 15.8.2026: Der Live-Test meldete nur die Ueberschrift. Welcher
+  der beiden Faelle vorlag, war der Ausgabe **nicht anzusehen** — erst eine
+  Messung von Hand zeigte `{"top_news":[],"language":"de","country":"ch"}`,
+  HTTP 200, also den harmlosen. Neu trifft `clusters_of()` diese Unterscheidung
+  im Werkzeug: fehlendes Feld -> `UpstreamShapeError`, leere Liste -> leere Liste.
+
+- **Null Cluster steht jetzt ausdruecklich da.** Vorher blieb nur die
+  Ueberschrift uebrig, und die sieht genauso aus, wenn die Formatierung
+  scheitert. Fuer kleine Sprach-/Land-Kombinationen wie CH/de ist leer in
+  ruhigen Stunden der Normalfall — und der geplante Lauf um 06:17 UTC trifft
+  genau die. Ohne diese Zeile haette er regelmaessig rot gemeldet und ein Issue
+  «die Quelle antwortet nicht mehr wie erwartet» eroeffnet.
+
+  Die Meldung enthaelt bewusst nicht das Wort «Fehler»: Die Live-Tests sichern
+  `assert "Fehler" not in result` zu, und die Antwort ist ja gerade keiner. Die
+  erste Fassung dieser Zeile ist genau darueber gestolpert.
+
 ### Geaendert (erschoepftes Kontingent ist kein Defekt)
 
 - **Ein leeres Budget meldete rot wie ein Schemawechsel.** Am 14.8.2026 lief

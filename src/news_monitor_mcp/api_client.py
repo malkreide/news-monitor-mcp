@@ -54,23 +54,46 @@ def articles_of(payload: object, endpoint: str = "") -> list:
     Liste zurueck. Ein FEHLENDES `news` ist keine Aussage ueber die Nachrichten,
     sondern ueber die Antwort, und wird als solcher gemeldet.
     """
+    return _liste_unter(payload, "news", endpoint)
+
+
+def clusters_of(payload: object, endpoint: str = "") -> list:
+    """Die Cluster-Liste von `/top-news` — oder ein Fehler, nie stillschweigend [].
+
+    Dieselbe Begruendung wie bei `articles_of`, nur fuer den anderen Umschlag.
+    `/top-news` las ihn als einziges Werkzeug noch roh (`data.get("top_news",
+    [])`) und ist beim Umbau uebersehen worden.
+
+    Aufgefallen ist das am 2026-08-15: Der Live-Test meldete nur die
+    Ueberschrift, ohne Cluster. Ob die Quelle fuer CH/de nichts fuehrte oder
+    ihren Umschlag umbenannt hatte, war der Ausgabe **nicht anzusehen** — beides
+    haette identisch ausgesehen. Erst eine zusaetzliche Messung von Hand zeigte
+    `{"top_news":[],"language":"de","country":"ch"}`, also den harmlosen Fall.
+    Diese Unterscheidung soll das Werkzeug selbst treffen, nicht der Mensch
+    mit einer Extra-Anfrage.
+    """
+    return _liste_unter(payload, "top_news", endpoint)
+
+
+def _liste_unter(payload: object, feld: str, endpoint: str = "") -> list:
+    """Gemeinsame Mechanik: Feld fehlt -> Fehler, Feld leer -> leere Liste."""
     wo = f" von `{endpoint}`" if endpoint else ""
     if not isinstance(payload, dict):
         raise UpstreamShapeError(
             f"Die Antwort{wo} ist {type(payload).__name__}, kein Objekt. "
             "Das ist keine leere Treffermenge, sondern eine andere Antwortform."
         )
-    if "news" not in payload:
+    if feld not in payload:
         raise UpstreamShapeError(
-            f"Die Antwort{wo} fuehrt kein Feld `news`. Vorhanden: "
+            f"Die Antwort{wo} fuehrt kein Feld `{feld}`. Vorhanden: "
             f"{sorted(payload)}. Das ist keine leere Treffermenge, sondern "
             "eine andere Antwortform — die Abfrage gehoert geprueft, nicht "
             "wiederholt."
         )
-    news = payload["news"]
-    if not isinstance(news, list):
-        raise UpstreamShapeError(f"`news`{wo} ist {type(news).__name__}, nicht eine Liste.")
-    return news
+    wert = payload[feld]
+    if not isinstance(wert, list):
+        raise UpstreamShapeError(f"`{feld}`{wo} ist {type(wert).__name__}, nicht eine Liste.")
+    return wert
 
 
 def _get_api_key() -> Optional[SecretStr]:

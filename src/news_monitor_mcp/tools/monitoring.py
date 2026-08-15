@@ -15,6 +15,7 @@ from news_monitor_mcp.api_client import (
     _check_api_key,
     _get_client,
     articles_of,
+    clusters_of,
 )
 from news_monitor_mcp.app import _cache, mcp
 from news_monitor_mcp.errors import _handle_api_error, _no_key_message
@@ -181,7 +182,13 @@ async def news_top_headlines(params: TopNewsInput) -> str:
                 _cache.set("headlines", cache_params, data)
         except Exception as e:
             return _handle_api_error(e)
-    clusters = data.get("top_news", [])
+    # Nicht `data.get("top_news", [])`: Das beantwortet «die Quelle fuehrt hier
+    # gerade nichts» und «die Quelle antwortet anders» mit derselben leeren
+    # Liste. Am 15.8.2026 war der Unterschied der Ausgabe nicht anzusehen.
+    try:
+        clusters = clusters_of(data, "/top-news")
+    except UpstreamShapeError as e:
+        return _handle_api_error(e)
     if params.response_format == ResponseFormat.JSON:
         return json.dumps(
             {
@@ -201,6 +208,22 @@ async def news_top_headlines(params: TopNewsInput) -> str:
     lines = [
         f"## Top-Schlagzeilen: {params.source_country.upper()} | {params.language.upper()} | {date_display}\n{cache_info}"
     ]
+    # Null Cluster ist eine Aussage der Quelle — und muss als solche dastehen.
+    # Vorher blieb in diesem Fall nur die Ueberschrift uebrig, und die sagt
+    # nichts: Sie sieht genauso aus, wenn die Formatierung scheitert. Fuer
+    # kleine Sprach-/Land-Kombinationen wie CH/de ist leer ausserdem der
+    # Normalfall in ruhigen Stunden, kein Ausnahmezustand.
+    if not clusters:
+        # Das Wort «Fehler» darf hier NICHT vorkommen: Die Live-Tests sichern
+        # `assert "Fehler" not in result` zu, und die Antwort ist ja gerade
+        # keiner. Genau darueber ist die erste Fassung dieser Zeile gestolpert.
+        lines.append(
+            f"\n*Die Quelle fuehrt aktuell keine Top-Cluster fuer "
+            f"{params.source_country.upper()}/{params.language.upper()}. "
+            "Das ist ihre Antwort und keine Stoerung — in kleinen Sprachraeumen "
+            "kommt das in ruhigen Stunden vor.*"
+        )
+        return "\n".join(lines)
     for i, cluster in enumerate(clusters, 1):
         arts = cluster.get("news", [])
         if not arts:
