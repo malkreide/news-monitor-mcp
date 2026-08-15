@@ -41,6 +41,28 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # ===== PROBE — wird vor dem PR wieder entfernt =====
+      # `test_live_top_news_schweiz` meldete am 15.8.2026 nur die Ueberschrift,
+      # ohne Cluster. Zwei voellig verschiedene Ursachen kommen infrage, und
+      # `data.get("top_news", [])` in monitoring.py:184 beantwortet beide gleich:
+      #   a) Die Quelle hat fuer CH/de gerade nichts — eine Aussage der Quelle.
+      #   b) Der Umschlag heisst nicht mehr `top_news` — eine Aussage ueber die
+      #      Antwort, die als "0 Cluster" durchgeht.
+      # Gemessen wird deshalb der ROHE Umschlag, nicht die formatierte Ausgabe.
+      - name: PROBE — wie sieht die Antwort von /top-news wirklich aus?
+        env:
+          K: ${{ secrets.WORLD_NEWS_API_KEY }}
+        run: |
+          set -uo pipefail
+          code=$(curl -s -o /tmp/t.json -w '%{http_code}' -H "x-api-key: $K" \
+            "https://api.worldnewsapi.com/top-news?source-country=ch&language=de&number=5")
+          echo "HTTP $code"
+          echo "Schluessel der Antwort: $(jq -c 'keys' /tmp/t.json 2>/dev/null || echo 'kein JSON')"
+          echo "hat top_news:          $(jq -c 'has("top_news")' /tmp/t.json 2>/dev/null)"
+          echo "Anzahl Cluster:        $(jq -c '.top_news | length' /tmp/t.json 2>/dev/null)"
+          echo "Rohantwort (400 Z.):"
+          head -c 400 /tmp/t.json; echo
+
       - name: Live-Tests gegen die echte Quelle
         id: pytest
         run: pytest tests/ -m live -v --junitxml=live-report.xml
