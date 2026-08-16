@@ -87,7 +87,14 @@ python scripts/check_version_sync.py
 
 Dazu der Job `docker`: Image bauen, dann `--help` aus dem Image und der
 Nachweis, dass der Container ohne `MCP_BEARER_TOKEN` mit Exit-Code 2 abbricht.
-Test-Matrix: Python 3.11 / 3.12 / 3.13.
+Test-Matrix: Python 3.11 / 3.12 / 3.13 — aber nur für den Job `test`. Die zwei
+ruff-Gates laufen zusätzlich im Job `lint`, und der hat keine Matrix: er läuft
+auf 3.11. Ein grünes 3.12/3.13 sagt über ihn nichts aus. Ein `fail-fast: false`
+steht nicht da, eine rote 3.11 bricht 3.12 und 3.13 ab.
+
+Die Gate-Zeilen rufen `python -m ruff` statt `ruff` — das ist Absicht und
+gehört beim Nachfahren übernommen: ein `ruff` früher im `PATH` wäre eine andere
+Version und meldete Abweichungen, die niemand verursacht hat.
 
 **Live-Tests:** `.github/workflows/live-tests.yml` fährt die fünf
 `@pytest.mark.live`-Tests täglich um 06:17 UTC (plus `workflow_dispatch`) —
