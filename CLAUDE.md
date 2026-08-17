@@ -77,6 +77,7 @@ dieser Schritt ist nicht redundant — ohne ihn hat der Job überhaupt kein ruff
 **Gates, wörtlich aus der CI:**
 
 ```bash
+python scripts/check_ruff_pin.py
 python -m ruff check src/ tests/ scripts/
 python -m ruff format --check src/ tests/ scripts/
 python -m py_compile src/news_monitor_mcp/server.py
