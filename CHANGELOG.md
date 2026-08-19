@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hinzugefuegt (SessionStart-Hook: Klon-Aktualitaet)
+
+- **Der veraltete Klon meldet sich jetzt selbst.** `.claude/hooks/session-start.sh`
+  sagt beim Sessionstart, wie viele Commits der ausgecheckte Stand hinter
+  `origin/<Standard-Branch>` liegt. Anlass ist der 3.8.2026: zweimal eine rote
+  CI, deren Ursache nicht im Diff stand — es fehlten jeweils genau die Commits,
+  die das Gate einfuehrten, an dem der Branch scheiterte. Gesucht wurde
+  daraufhin im eigenen Diff, der in Ordnung war.
+
+- **Er haelt die Session nie an.** Kein Netz, kein Remote, detached HEAD, kein
+  `git`, ein Remote das nicht antwortet: Exit 0, keine Ausgabe. Ein Hook, der
+  bei Netzproblemen die Arbeit anhaelt, wird nach dem zweiten Mal abgeschaltet
+  und schuetzt danach gar nichts. Jeder Netzaufruf laeuft unter `timeout`
+  (5 s, `CLAUDE_KLONCHECK_TIMEOUT`); ohne `timeout`/`gtimeout` im System
+  unterbleibt die Pruefung ganz — ein haengender Sessionstart waere schlimmer
+  als eine ausgefallene Warnung.
+
+- **Getragen wird das nicht von einer Liste abgefangener Fehlerfaelle.** Die
+  waere nie vollstaendig. Beim Nachmessen erwies sich zudem jeder einzelne
+  Wachposten (`rev-parse --is-inside-work-tree`, `rev-parse --verify HEAD`,
+  `remote get-url origin`) als entbehrlich: Entfernte man ihn, blieben alle
+  Tests gruen, weil ihn ein anderer verdeckte. Sie stehen deshalb nicht mehr
+  im Skript. Geblieben sind zwei Eigenschaften, die fuer alle Faelle gelten —
+  kein `set -e` bei ausdruecklichem `exit 0` auf jedem Pfad, und gemeldet wird
+  nur, was als Zahl > 0 aus dem Repo kommt.
+
+- **Der Standard-Branch wird ermittelt, nicht angenommen.** Ueber
+  `git ls-remote --symref origin HEAD`, mit dem lokalen `origin/HEAD` als
+  netzloser Rueckfallebene. Drei Server im Portfolio heissen ihn `master`; dort
+  scheitert ein fest verdrahtetes `main` mit «couldn't find remote ref main» —
+  was leicht fuer ein Netzproblem gehalten wird. Die Annahme hat schon einmal
+  einen Branch 15 Commits alt werden lassen. `tests/test_kloncheck.py` baut den
+  Fall so, dass eine `main`-Annahme nicht scheitert, sondern **schweigt**: Im
+  Upstream steht `main` genau auf dem Klon-Stand, `master` drei Commits weiter.
+
+- **Bei 0 schweigt er.** Eine Meldung, die immer kommt, wird nicht mehr gelesen.
+
 ### Behoben (/top-news las den Umschlag roh)
 
 - **Die letzte Stelle mit `data.get(..., [])`.** Sieben Abfragen liefen laengst

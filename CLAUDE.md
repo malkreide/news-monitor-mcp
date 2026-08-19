@@ -23,6 +23,13 @@ Ein veralteter Klon erzeugt eine rote CI, deren Ursache nicht im Diff steht.
 Am 3.8.2026 zweimal passiert — beide Male fehlten genau die Commits, die
 das Gate einführten, an dem der Branch scheiterte.
 
+In diesem Repo läuft die Prüfung zusätzlich als SessionStart-Hook
+(`.claude/hooks/session-start.sh`, registriert in `.claude/settings.json`).
+Er meldet nur, wenn Commits fehlen, und geht bei jedem Netz-, Remote- oder
+Git-Problem still durch — er ersetzt den Handgriff oben deshalb nicht,
+sondern fängt das Vergessen ab. Sein Schweigen ist kein Beleg für einen
+aktuellen Klon.
+
 Gates lokal fahren, mit der GEPINNTEN ruff-Version aus der CI. Eine andere
 Version meldet Abweichungen, die niemand verursacht hat.
 
