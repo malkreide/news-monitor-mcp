@@ -41,8 +41,11 @@ jobs:
       - name: Abhängigkeiten installieren
         run: uv pip install -e ".[dev]" --system
 
+      # `continue-on-error`, damit der Nachweis unten in jedem Fall laeuft. Rot
+      # wird der Job ganz am Schluss, aus dem eingeordneten Ergebnis.
       - name: Live-Tests gegen die echte Quelle
         id: pytest
+        continue-on-error: true
         run: pytest tests/ -m live -v --junitxml=live-report.xml
         env:
           PYTHONPATH: src
@@ -51,15 +54,24 @@ jobs:
       # Ohne diesen Schritt waere der Workflow selbst die naechste Falle: Sind
       # alle Tests uebersprungen, meldet pytest Exit-Code 0, und ein Lauf, der
       # nichts geprueft hat, saehe aus wie ein Lauf, der alles geprueft hat.
+      #
+      # Der Nachweis kennt seit diesem Commit drei Zustaende statt zwei. Zwei
+      # reichten nicht: Sein Rueckgabewert sagte nur «in Ordnung» oder «nicht in
+      # Ordnung», und der Schritt darunter las jedes «nicht in Ordnung» als
+      # gebrochenen Vertrag mit der Quelle — das Issue heisst «die Quelle
+      # antwortet nicht mehr wie erwartet». Bei null ausgefuehrten Tests ist das
+      # eine Behauptung ueber eine Quelle, die niemand gefragt hat.
       - name: Nachweis, dass etwas gemessen wurde
+        id: nachweis
         if: always()
+        continue-on-error: true
         run: python scripts/check_live_run.py live-report.xml
 
       # Ein geplanter Lauf hat kein Publikum: Es gibt keinen PR, auf dem ein
       # rotes Kreuz auffiele. Ohne Meldung waere die Abdeckung zwar da, aber
       # folgenlos.
       - name: Bei Fehlschlag ein Issue oeffnen oder aktualisieren
-        if: failure() && github.event_name == 'schedule'
+        if: steps.nachweis.outputs.state == 'finding' && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
           LAUF: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -87,3 +99,22 @@ jobs:
           else
             gh issue create --title "$TITEL" --label live-tests --body "$text"
           fi
+
+      # Erst hier wird der Job rot. `clear` ist gruen; `finding` und `unknown`
+      # sind beide rot, aber nur `finding` hat oben ein Issue erzeugt — denn nur
+      # dort ist eine Aussage ueber die Quelle gedeckt. `unknown` bleibt sichtbar
+      # ueber den roten Job und die Zusammenfassung, ruehrt den Issue-Thread aber
+      # nicht an.
+      #
+      # Ueber `env`, nicht ueber `${{ }}` im Skript: Der Grund kann einen Pfad
+      # enthalten, den der Aufrufer gesetzt hat, und `${{ }}` setzt ihn vor dem
+      # Start woertlich in die Shell ein.
+      - name: Ergebnis durchreichen
+        if: always() && steps.nachweis.outputs.state != 'clear'
+        env:
+          LIVE_STATE: ${{ steps.nachweis.outputs.state }}
+          LIVE_REASON: ${{ steps.nachweis.outputs.reason }}
+        run: |
+          echo "Live-Suite: ${LIVE_STATE:-unbekannt}"
+          echo "${LIVE_REASON:-Der Nachweis hat keinen Zustand geschrieben.}"
+          exit 1

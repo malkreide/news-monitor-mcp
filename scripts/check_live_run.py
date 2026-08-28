@@ -19,12 +19,49 @@ Zwei Faelle werden deshalb rot gemeldet:
 Ein Teil uebersprungen (kein `WORLD_NEWS_API_KEY`) ist dagegen kein Fehler,
 sondern der dokumentierte Zustand — aber einer, der sichtbar sein muss, sonst
 haelt man die halbe Messung fuer die ganze.
+
+DREI ZUSTAENDE, NICHT ZWEI
+--------------------------
+Der Rueckgabewert allein sagt nur «in Ordnung» oder «nicht in Ordnung», und der
+Workflow las jedes «nicht in Ordnung» als gebrochenen Vertrag mit der Quelle:
+Das Issue hiess «die Quelle antwortet nicht mehr wie erwartet». Fuer einen
+Fehlschlag stimmt das. Fuer einen Lauf, der nichts gemessen hat — jeder Test
+uebersprungen, die Marke umbenannt, kein Bericht geschrieben —, ist es eine
+Behauptung ueber eine Quelle, die niemand gefragt hat.
+
+Deshalb wird zusaetzlich ein Zustand nach `$GITHUB_OUTPUT` geschrieben:
+
+  clear    gelaufen und gruen
+  finding  gelaufen, etwas ist gefallen
+  unknown  nicht gelaufen — ueber die Quelle sagt der Lauf nichts
+
+Der Exit-Code bleibt, was er war; er entscheidet weiter ueber rot und gruen.
+Der Zustand entscheidet daneben, welche Meldung dazu passt.
 """
 
 import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+CLEAR = "clear"
+FINDING = "finding"
+UNKNOWN = "unknown"
+
+
+def _zustand(zustand: str, grund: str) -> None:
+    """Schreibt den Zustand nach `$GITHUB_OUTPUT`, wenn es eine gibt.
+
+    Der Grund wird flachgeklopft: Die `key=value`-Form endet an der ersten
+    neuen Zeile, und was danach steht, liest der Runner als naechstes Output —
+    ein mehrzeiliger Grund koennte so ein zweites `state=` nachschieben.
+    """
+    ziel = os.environ.get("GITHUB_OUTPUT")
+    if not ziel:
+        return
+    with open(ziel, "a", encoding="utf-8") as f:
+        f.write(f"state={zustand}\n")
+        f.write(f"reason={' '.join(grund.split())}\n")
 
 
 def _summary(zeilen: list[str]) -> None:
@@ -42,6 +79,7 @@ def main(argv: list[str]) -> int:
 
     if not pfad.exists():
         _summary([f"::error::{pfad} fehlt — pytest hat keinen Bericht geschrieben."])
+        _zustand(UNKNOWN, f"{pfad} fehlt — pytest hat keinen Bericht geschrieben")
         return 1
 
     wurzel = ET.parse(pfad).getroot()
@@ -81,6 +119,7 @@ def main(argv: list[str]) -> int:
             "«nichts zu tun», sondern dass die Markierung `live` nicht mehr greift."
         )
         _summary(zeilen)
+        _zustand(UNKNOWN, "null Live-Tests eingesammelt — die Markierung greift nicht mehr")
         return 1
 
     if gelaufen == 0:
@@ -90,6 +129,7 @@ def main(argv: list[str]) -> int:
             "gemessen und darf nicht gruen aussehen."
         )
         _summary(zeilen)
+        _zustand(UNKNOWN, f"alle {gesamt} Live-Tests uebersprungen — geprueft wurde nichts")
         return 1
 
     if uebersprungen:
@@ -104,6 +144,13 @@ def main(argv: list[str]) -> int:
             zeilen.extend(f"- {g}" for g in gruende)
         else:
             zeilen.append("- *(keiner im Bericht — pytest hat den Grund nicht mitgeschrieben)*")
+
+    if fehlgeschlagen:
+        # Hier war die Suite unterwegs und etwas ist gefallen: der einzige Fall,
+        # in dem eine Meldung ueber die Quelle gedeckt ist.
+        _zustand(FINDING, f"{fehlgeschlagen} von {gesamt} Live-Test(s) gefallen")
+    else:
+        _zustand(CLEAR, f"{gelaufen} von {gesamt} Live-Test(s) ausgefuehrt, alle gruen")
 
     _summary(zeilen)
     return 0

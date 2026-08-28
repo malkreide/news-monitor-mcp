@@ -7,6 +7,7 @@ Wirkung. Jede der drei Zusicherungen wird darum einzeln belegt — und zwar so,
 dass sie fallen kann.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -112,3 +113,53 @@ def test_uebersprungene_nennen_ihren_grund(tmp_path):
     assert ergebnis.returncode == 0, ergebnis.stdout
     assert "Budget der Quelle erreicht (HTTP 402)" in ergebnis.stdout, ergebnis.stdout
     assert "WORLD_NEWS_API_KEY nicht gesetzt" in ergebnis.stdout, ergebnis.stdout
+
+
+def _lauf_mit_output(pfad: Path, tmp_path: Path) -> dict[str, str]:
+    """Wie `_lauf`, aber mit gesetztem `$GITHUB_OUTPUT` — liefert die Schluessel zurueck."""
+    ziel = tmp_path / "gh-output"
+    ziel.write_text("", encoding="utf-8")
+    umgebung = {**os.environ, "GITHUB_OUTPUT": str(ziel)}
+    subprocess.run([sys.executable, str(_SKRIPT), str(pfad)], capture_output=True, text=True, env=umgebung)
+    zeilen = [z for z in ziel.read_text(encoding="utf-8").splitlines() if z]
+    return dict(z.split("=", 1) for z in zeilen)
+
+
+def test_ein_fehlschlag_ist_ein_befund(tmp_path):
+    """Gelaufen und gefallen: der einzige Fall, in dem eine Meldung ueber die Quelle gedeckt ist."""
+    bericht = _bericht(tmp_path / "r.xml", tests=5, skipped=0, failures=1)
+    assert _lauf_mit_output(bericht, tmp_path)["state"] == "finding"
+
+
+def test_alles_uebersprungen_ist_kein_befund_sondern_unbekannt(tmp_path):
+    """Der Lauf ist rot — aber nicht, weil die Quelle abgewichen waere.
+
+    Bis zu diesem Commit las der Workflow jedes Rot als «die Quelle antwortet
+    nicht mehr wie erwartet» und oeffnete ein Issue mit genau diesem Satz. Bei
+    null ausgefuehrten Tests ist das eine Behauptung ueber eine Quelle, die
+    niemand gefragt hat.
+    """
+    bericht = _bericht(tmp_path / "r.xml", tests=5, skipped=5)
+    assert _lauf_mit_output(bericht, tmp_path)["state"] == "unknown"
+
+
+def test_null_eingesammelt_ist_unbekannt(tmp_path):
+    bericht = _bericht(tmp_path / "r.xml", tests=0, skipped=0)
+    assert _lauf_mit_output(bericht, tmp_path)["state"] == "unknown"
+
+
+def test_fehlender_bericht_ist_unbekannt(tmp_path):
+    assert _lauf_mit_output(tmp_path / "gibtsnicht.xml", tmp_path)["state"] == "unknown"
+
+
+def test_gruener_lauf_ist_clear(tmp_path):
+    """Teilweise uebersprungen bleibt gruen — der dokumentierte Zustand ohne Schluessel."""
+    bericht = _bericht(tmp_path / "r.xml", tests=5, skipped=3)
+    assert _lauf_mit_output(bericht, tmp_path)["state"] == "clear"
+
+
+def test_ein_mehrzeiliger_grund_schiebt_kein_zweites_state_nach(tmp_path):
+    """`key=value` endet an der ersten neuen Zeile — was danach steht, ist ein eigenes Output."""
+    pfad = tmp_path / "r\nstate=clear.xml"
+    werte = _lauf_mit_output(pfad, tmp_path)
+    assert werte["state"] == "unknown"
