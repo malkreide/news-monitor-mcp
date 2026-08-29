@@ -8,9 +8,6 @@ updates:
       time: "06:00"
       timezone: "Europe/Zurich"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "python"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -23,9 +20,6 @@ updates:
       time: "06:00"
       timezone: "Europe/Zurich"
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "ci"
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -38,9 +32,6 @@ updates:
       time: "06:00"
       timezone: "Europe/Zurich"
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "docker"
     commit-message:
       prefix: "docker"
       include: "scope"
