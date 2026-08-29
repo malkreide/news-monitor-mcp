@@ -52,7 +52,7 @@ dev = [
     # `dev`-Extra mit und hat keinen eigenen Pin-Schritt mehr. Beim Anheben:
     # Version aendern, `ruff format` einmal ueber die gelinteten Pfade laufen
     # lassen und das Ergebnis mit committen.
-    "ruff==0.16.3",
+    "ruff==0.16.4",
     # Nur fuer tests/test_meldeweg.py: liest den Shell-Block aus dem
     # Live-Test-Workflow, damit der Test das Original prueft und keine Kopie.
     "pyyaml>=6.0",
