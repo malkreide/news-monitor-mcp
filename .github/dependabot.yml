@@ -3,10 +3,13 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Europe/Zurich"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
@@ -15,10 +18,13 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Europe/Zurich"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
@@ -27,8 +33,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Europe/Zurich"
     open-pull-requests-limit: 3
