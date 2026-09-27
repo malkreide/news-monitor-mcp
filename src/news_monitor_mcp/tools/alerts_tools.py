@@ -5,7 +5,9 @@ Aufgeteilt vom Audit-Finding ARCH-MONOLITHIC (medium, 2026-05-13).
 
 import json
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Annotated, Any, Union
+
+from mcp.server.mcpserver import Context, Elicit, ElicitationResult, Resolve
 
 from news_monitor_mcp.alerts import ALERTS_FILE
 from news_monitor_mcp.api_client import (
@@ -15,6 +17,7 @@ from news_monitor_mcp.api_client import (
     articles_of,
 )
 from news_monitor_mcp.app import _alert_manager, mcp
+from news_monitor_mcp.confirmation import Bestaetigung, Entscheid, OhneRueckfrage, entscheid, fragt_den_menschen
 from news_monitor_mcp.errors import _handle_api_error, _no_key_message
 from news_monitor_mcp.formatting import (
     AlertConditionType,
@@ -264,6 +267,17 @@ async def news_alert_check(params: CheckAlertsInput) -> str:
     return "\n".join(lines)
 
 
+async def _frage_alert_loeschen(
+    params: DeleteAlertInput, ctx: Context
+) -> Union[Bestaetigung, OhneRueckfrage, Elicit[Bestaetigung]]:
+    """Fragt die Person, bevor ein Alert verschwindet (siehe `confirmation`)."""
+    alert = _alert_manager.get(params.alert_id)
+    if alert is None or not fragt_den_menschen(ctx):
+        return OhneRueckfrage(confirm=params.confirm)
+    name = alert.get("name", "Unbekannt")
+    return Elicit(f"Alert '{name}' ({params.alert_id}) permanent loeschen?", Bestaetigung)
+
+
 @mcp.tool(
     name="news_alert_delete",
     annotations={
@@ -274,8 +288,14 @@ async def news_alert_check(params: CheckAlertsInput) -> str:
         "openWorldHint": False,
     },
 )
-async def news_alert_delete(params: DeleteAlertInput) -> str:
+async def news_alert_delete(
+    params: DeleteAlertInput,
+    bestaetigung: Annotated[ElicitationResult[Bestaetigung], Resolve(_frage_alert_loeschen)] = None,  # type: ignore[assignment]
+) -> str:
     """Loescht einen konfigurierten Alert permanent.
+
+    Fragt ein Client mit Formular-Elicitation im Protokoll 2026-07-28 an, bestaetigt
+    die Person selbst (input_required); sonst gilt confirm.
 
     Args:
         params (DeleteAlertInput): alert_id aus news_alert_list
@@ -287,7 +307,10 @@ async def news_alert_delete(params: DeleteAlertInput) -> str:
     if alert is None:
         return f"Alert {params.alert_id} nicht gefunden.\nnews_alert_list zum Anzeigen aller Alert-IDs."
     name = alert.get("name", "Unbekannt")
-    if not params.confirm:
+    decision = entscheid(bestaetigung, params.confirm)
+    if decision is Entscheid.ABGELEHNT:
+        return f"Abgebrochen: Alert **{name}** (`{params.alert_id}`) bleibt bestehen."
+    if decision is Entscheid.OFFEN:
         return (
             f"Bestaetigung erforderlich: Alert **{name}** (`{params.alert_id}`) wird permanent geloescht. "
             f"Erneut mit `confirm=true` aufrufen."

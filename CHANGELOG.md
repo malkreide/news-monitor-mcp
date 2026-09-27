@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Geaendert (Spec 2026-07-28 nativ)
+
+- **Loeschen fragt die Person, nicht das Modell** (SEP-2322, Multi Round-Trip
+  Requests). `news_alert_delete` und `news_cache_clear` antworten einem
+  `2026-07-28`-Client mit Formular-Elicitation mit `resultType:
+  "input_required"` und einer `elicitation/create`-Frage; geloescht wird erst
+  auf die Antwort beim Retry. Bisher trug `confirm=true` die ganze
+  HITL-Last — gesetzt vom Modell, also eine Bestaetigung, die es sich selbst
+  erteilen konnte. Wird gefragt, zaehlt `confirm` nicht mehr; eine Zustimmung
+  ohne den `requestState` der Frage-Runde auch nicht (das SDK bindet ihn an
+  die Argumente und fragt sonst neu). Ohne Formular-Elicitation und in der
+  ganzen Handshake-Aera bleibt der `confirm`-Weg unveraendert, statt mit
+  `MissingRequiredClientCapability` abzubrechen.
+
+- **`serverInfo` nennt Version, Titel, Beschreibung, Website** (SEP-2575).
+  Ohne Handshake stellt sich der Server in `server/discover` und im `_meta`
+  jedes Ergebnisses vor — gemessen stand dort `"version": ""`. Die Version
+  kommt aus den Paket-Metadaten wie der User-Agent.
+
+- **Kein `Mcp-Session-Id` mehr, auch nicht fuer Handshake-Clients**
+  (SEP-2567). Der HTTP-Transport laeuft mit `stateless_http=True`; der Server
+  haelt keinen Zustand pro Verbindung, eine Sitzung waere nur Speicher bis zum
+  Idle-Timeout gewesen. `2025-11-25` erlaubt das: Session-IDs sind dort ein
+  MAY. Ein-Prozess-Dienst bleibt er trotzdem — Cache, `alerts.json` und der
+  prozesslokal versiegelte `requestState` (10 Minuten) binden weiter.
+
+- `tests/test_spec_2026_07_28.py`: 30 Tests durch den zusammengebauten
+  ASGI-Stack. Gegenprobe gefahren: jede der neuen Zusicherungen einzeln
+  neutralisiert, jedes Mal fallen genau die zugehoerigen Tests. Die
+  Versionspruefung in `fragt_den_menschen` fiel dabei zunaechst durch — der
+  zustandslose Handshake kennt keine Client-Capabilities und verdeckte sie; sie
+  ist jetzt direkt geprueft, weil sie auf stdio lasttragend ist.
+
+- Bewusst nicht geaendert: `server/discover` fuehrt die Capabilities `prompts`
+  und `resources`, obwohl der Server keine registriert — `MCPServer`
+  registriert beide Handler immer, die Listen sind leer.
+
 ### Hinzugefuegt
 
 - **Frischehinweise auf `tools/list` und `server/discover`** (SEP-2549, Spec

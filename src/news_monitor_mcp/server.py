@@ -181,8 +181,15 @@ def build_http_app(token: str, allowed_origins: frozenset[str], security=None, h
     """Thin wrapper: zieht die Starlette-App aus der MCPServer-Instanz und hängt
     den Middleware-Stack an (siehe `http_auth._attach_middlewares` für Details).
     """
+    # `stateless_http=True`: auch die Handshake-Aera bekommt keine
+    # `Mcp-Session-Id` mehr. Spec 2026-07-28 (SEP-2567) hat Sitzungen entfernt;
+    # dieser Server haelt keinen Zustand pro Verbindung — Alerts tragen
+    # servergepraegte IDs als Tool-Argument, der Cache ist prozessweit. Eine
+    # Sitzung waere nur Speicher bis zum Idle-Timeout und wuerde jede Anfrage
+    # an die Replik binden, die sie angelegt hat. 2025-11-25 erlaubt das: der
+    # Server MAY eine Session-ID vergeben, muss aber nicht.
     return _attach_middlewares(
-        mcp.streamable_http_app(transport_security=security, host=host),
+        mcp.streamable_http_app(transport_security=security, host=host, stateless_http=True),
         token,
         allowed_origins,
     )
