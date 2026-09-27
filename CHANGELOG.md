@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+Minor statt Patch, weil sich das Verhalten zweier Tools aendert: ein
+`2026-07-28`-Client mit Formular-Elicitation bekommt bei `news_alert_delete`
+und `news_cache_clear` jetzt eine Rueckfrage an die Person (`input_required`),
+und `confirm=true` ueberspringt sie nicht mehr. Alle anderen Clients sehen den
+bisherigen `confirm`-Weg. Die Laufzeit-Abhaengigkeiten sind gegenueber 0.3.6
+unveraendert (`mcp>=2.0.0,<3`); gebaut und getestet gegen `mcp` 2.2.0.
+
+Fuer den Betrieb ueber HTTP neu: keine `Mcp-Session-Id` mehr, auch nicht fuer
+Handshake-Clients. Wer einen Proxy auf Session-Affinitaet konfiguriert hat,
+braucht sie dafuer nicht mehr — fuer eine offene Rueckfrage aber schon: deren
+`requestState` ist prozesslokal versiegelt (siehe README, Scaling notes).
+
+### Behoben (Release-Vorbereitung)
+
+- `--help` nannte fest «v0.3.0», seit drei Releases falsch. Die Beschreibung
+  liest jetzt `__version__` aus den Paket-Metadaten.
+
 ### Geaendert (Spec 2026-07-28 nativ)
 
 - **Loeschen fragt die Person, nicht das Modell** (SEP-2322, Multi Round-Trip
