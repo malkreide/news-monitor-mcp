@@ -204,7 +204,12 @@ def main() -> None:
     """Startet den News Monitor MCP Server."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="News Monitor MCP Server v0.3.0")
+    from news_monitor_mcp import __version__
+
+    # Aus den Paket-Metadaten, nicht als Literal: hier stand bis 0.4.0 fest
+    # "v0.3.0", drei Releases lang — `check_version_sync.py` sucht nach der
+    # aktuellen Version und sieht eine veraltete deshalb nicht.
+    parser = argparse.ArgumentParser(description=f"News Monitor MCP Server v{__version__}")
     parser.add_argument("--http", action="store_true", help="HTTP-Server statt stdio")
     parser.add_argument(
         "--host",
