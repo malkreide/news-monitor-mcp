@@ -13,6 +13,7 @@ from mcp.server.caching import CacheableMethod, CacheHint
 from mcp.server.mcpserver import MCPServer
 
 import news_monitor_mcp.api_client as _api_client_module
+from news_monitor_mcp import __version__
 from news_monitor_mcp.alerts import AlertManager
 from news_monitor_mcp.cache import NewsCache, _cache_sweep_loop, _get_cache_sweep_seconds
 from news_monitor_mcp.logging_setup import logger
@@ -77,8 +78,20 @@ CACHE_HINTS: dict[CacheableMethod, CacheHint] = {
     "server/discover": CacheHint(ttl_ms=LIST_CACHE_TTL_MS, scope="public"),
 }
 
+# Spec 2026-07-28 (SEP-2575): ohne Handshake gibt es keinen Moment mehr, in dem
+# sich der Server einmal vorstellt — `serverInfo` steht in `server/discover` und
+# im `_meta` JEDES Ergebnisses. Ohne `version` trug es dort "" — gemessen, nicht
+# vermutet: ein Client konnte nicht sagen, welcher Stand ihm antwortet.
+# `__version__` kommt aus den Paket-Metadaten, driftet also nicht von pyproject weg.
 mcp = MCPServer(
     "news_monitor_mcp",
+    title="News Monitor",
+    description=(
+        "Nachrichtensuche, Sentiment, Headlines, Trends und Alerts via WorldNewsAPI, "
+        "mit Schweizer bzw. DACH-Voreinstellung."
+    ),
+    website_url="https://github.com/malkreide/news-monitor-mcp",
+    version=__version__,
     cache_hints=CACHE_HINTS,
     instructions=(
         "News-Monitoring-Server mit 15 Tools via WorldNewsAPI. "

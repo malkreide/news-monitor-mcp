@@ -3,8 +3,13 @@
 Aufgeteilt vom Audit-Finding ARCH-MONOLITHIC (medium, 2026-05-13).
 """
 
+from typing import Annotated, Union
+
+from mcp.server.mcpserver import Context, Elicit, ElicitationResult, Resolve
+
 from news_monitor_mcp.app import _cache, mcp
 from news_monitor_mcp.cache import CACHE_TTL
+from news_monitor_mcp.confirmation import Bestaetigung, Entscheid, OhneRueckfrage, entscheid, fragt_den_menschen
 from news_monitor_mcp.models import CacheClearInput
 
 
@@ -46,6 +51,21 @@ async def news_cache_stats() -> str:
     return "\n".join(lines)
 
 
+async def _frage_cache_leeren(
+    params: CacheClearInput, ctx: Context
+) -> Union[Bestaetigung, OhneRueckfrage, Elicit[Bestaetigung]]:
+    """Fragt die Person, bevor der Cache geleert wird (siehe `confirmation`).
+
+    Die Frage nennt bewusst keine Eintragszahl: aendert sich der Wortlaut
+    zwischen zwei Runden, verwirft das SDK die Antwort und fragt neu — und die
+    Zahl aendert sich mit jedem parallelen Aufruf.
+    """
+    if (params.tool_type and params.tool_type not in CACHE_TTL) or not fragt_den_menschen(ctx):
+        return OhneRueckfrage(confirm=params.confirm)
+    scope = f"den Cache-Typ '{params.tool_type}'" if params.tool_type else "den GESAMTEN Cache"
+    return Elicit(f"News-Monitor: {scope} leeren?", Bestaetigung)
+
+
 @mcp.tool(
     name="news_cache_clear",
     annotations={
@@ -56,8 +76,14 @@ async def news_cache_stats() -> str:
         "openWorldHint": False,
     },
 )
-async def news_cache_clear(params: CacheClearInput) -> str:
+async def news_cache_clear(
+    params: CacheClearInput,
+    bestaetigung: Annotated[ElicitationResult[Bestaetigung], Resolve(_frage_cache_leeren)] = None,  # type: ignore[assignment]
+) -> str:
     """Leert den Cache (vollstaendig oder fuer einen spezifischen Tool-Typ).
+
+    Fragt ein Client mit Formular-Elicitation im Protokoll 2026-07-28 an, bestaetigt
+    die Person selbst (input_required); sonst gilt confirm.
 
     Args:
         params (CacheClearInput): tool_type (leer = alles leeren)
@@ -68,8 +94,11 @@ async def news_cache_clear(params: CacheClearInput) -> str:
     if params.tool_type and params.tool_type not in CACHE_TTL:
         valid = ", ".join(f"'{k}'" for k in CACHE_TTL)
         return f"Unbekannter Tool-Typ '{params.tool_type}'. Erlaubt: {valid}"
-    if not params.confirm:
-        scope = f"Cache-Typ `{params.tool_type}`" if params.tool_type else "GESAMTE Cache"
+    scope = f"Cache-Typ `{params.tool_type}`" if params.tool_type else "GESAMTE Cache"
+    decision = entscheid(bestaetigung, params.confirm)
+    if decision is Entscheid.ABGELEHNT:
+        return f"Abgebrochen: {scope} bleibt unveraendert."
+    if decision is Entscheid.OFFEN:
         current_size = (
             sum(1 for _, (_, t, _) in _cache._store.items() if t == params.tool_type)
             if params.tool_type

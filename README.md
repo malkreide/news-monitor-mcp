@@ -192,6 +192,7 @@ This server is currently **single-process / single-replica**:
 
 - The TTL cache lives in process memory (`NewsCache`). If you run multiple Render or Kubernetes replicas, each replica has its **own** cache — hit-rates drop linearly with the replica count.
 - Alerts persist to a local `alerts.json` (defaults to `/data` inside the container). Multiple replicas mounting the **same** persistent volume serialize via `fcntl.flock`, but for true cluster operation a shared store (Redis / Postgres) is needed — see the open finding [`SCALE-STATEFUL`](audits/2026-05-13-news-monitor-mcp/findings/SCALE-stateful-singletons.md).
+- A pending confirmation (`input_required`, see [MCP Protocol Version](#mcp-protocol-version)) carries a `requestState` that the SDK seals with a key held **only by this process**, valid for 10 minutes. A retry that reaches another replica, arrives after a restart, or comes later than that is rejected with `-32602 Invalid or expired requestState` — nothing is deleted, the client calls again and the person is asked again. Running several replicas would need a shared key (`request_state_security=` on `MCPServer`), which this server does not configure.
 - On **Render Free Tier**, the container sleeps after ~15 minutes of inactivity and loses non-persistent state. Attach a Persistent Disk for `/data` if you need alerts to survive restarts. For Render Free + alerts you must accept that the cache is lost on every wake-up.
 
 The `MCP_CACHE_MAX_PER_TYPE` cap (default `1000` entries / type) and the background sweep (`MCP_CACHE_SWEEP_SECONDS`, default 5 min) prevent the in-process cache from growing without bound.
@@ -274,6 +275,32 @@ the spec changelog between the two revisions, verify the server still behaves,
 then move the constant, this section, `README.de.md` and
 [`CHANGELOG.md`](CHANGELOG.md) together.
 
+### What the server contributes in `2026-07-28`
+
+The SDK carries the envelope, `server/discover` and the error codes. Three
+things it does not get right on its own, measured through the assembled ASGI
+stack in [`tests/test_spec_2026_07_28.py`](tests/test_spec_2026_07_28.py):
+
+- **Identity.** Without a handshake, `serverInfo` travels in `server/discover`
+  and in the `_meta` of every result. It used to carry `"version": ""`; it now
+  names version (from the package metadata), title, description and website.
+- **No sessions, in either era.** The spec removed `Mcp-Session-Id`
+  (SEP-2567). The HTTP transport now runs stateless for handshake clients too:
+  this server keeps no per-connection state — alerts are addressed by
+  server-minted IDs passed as tool arguments, the cache is process-wide. A
+  session no longer pins a client to one process; what still does is listed
+  under [Scaling notes](#scaling-notes).
+- **Human confirmation via `input_required`** (SEP-2322) for the two
+  destructive tools, `news_alert_delete` and `news_cache_clear`. When a
+  `2026-07-28` client declares form elicitation, the server asks the *person*
+  and only acts on their answer — a `confirm=true` set by the model no longer
+  skips the question. Clients without form elicitation, and every handshake
+  client, keep the `confirm` flow unchanged.
+
+Not changed on purpose: `server/discover` still lists `prompts` and
+`resources` capabilities, because `MCPServer` registers both handlers
+unconditionally; both lists are empty.
+
 ---
 
 ## Testing
@@ -289,7 +316,7 @@ PYTHONPATH=src pytest tests/ -m "live"
 PYTHONPATH=src python scripts/record_fixtures.py
 ```
 
-**181 tests** — 174 offline, 7 live (2 of which need no API key).
+**256 tests** — 249 offline, 7 live (2 of which need no API key).
 
 The live tests run daily at 06:17 UTC via
 [`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml), not on

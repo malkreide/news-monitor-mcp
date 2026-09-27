@@ -267,6 +267,41 @@ das Spec-Changelog zwischen den beiden Revisionen lesen, pruefen, ob sich der
 Server weiterhin richtig verhaelt, dann Konstante, diesen Abschnitt, `README.md`
 und [`CHANGELOG.md`](CHANGELOG.md) gemeinsam bewegen.
 
+### Was der Server in `2026-07-28` selbst beitraegt
+
+Envelope, `server/discover` und Fehlercodes traegt das SDK. Drei Dinge setzt
+es nicht von allein richtig; gemessen durch den zusammengebauten ASGI-Stack in
+[`tests/test_spec_2026_07_28.py`](tests/test_spec_2026_07_28.py):
+
+- **Identitaet.** Ohne Handshake steht `serverInfo` in `server/discover` und im
+  `_meta` jedes Ergebnisses. Dort stand bisher `"version": ""`; jetzt nennt es
+  Version (aus den Paket-Metadaten), Titel, Beschreibung und Website.
+- **Keine Sitzungen, in keiner Aera.** Die Spec hat `Mcp-Session-Id` entfernt
+  (SEP-2567). Der HTTP-Transport laeuft jetzt auch fuer Handshake-Clients
+  zustandslos: der Server haelt keinen Zustand pro Verbindung — Alerts werden
+  ueber servergepraegte IDs als Tool-Argument angesprochen, der Cache ist
+  prozessweit. Eine Sitzung bindet keinen Client mehr an einen Prozess. Was
+  das weiterhin tut: In-Memory-Cache, `alerts.json` und der unten beschriebene
+  `requestState` — der Server bleibt ein Ein-Prozess-Dienst.
+- **Menschliche Bestaetigung ueber `input_required`** (SEP-2322) fuer die zwei
+  loeschenden Tools `news_alert_delete` und `news_cache_clear`. Deklariert ein
+  `2026-07-28`-Client Formular-Elicitation, fragt der Server die *Person* und
+  handelt nur auf ihre Antwort — ein vom Modell gesetztes `confirm=true`
+  ueberspringt die Frage nicht mehr. Clients ohne Formular-Elicitation und alle
+  Handshake-Clients behalten den `confirm`-Weg unveraendert.
+
+Eine offene Rueckfrage traegt einen `requestState`, den das SDK mit einem
+Schluessel versiegelt, den **nur dieser Prozess** kennt, gueltig 10 Minuten.
+Ein Retry an eine andere Replik, nach einem Neustart oder nach Ablauf wird mit
+`-32602 Invalid or expired requestState` abgewiesen — geloescht wird nichts,
+der Client ruft erneut auf, die Person wird erneut gefragt. Mehrere Repliken
+braeuchten einen geteilten Schluessel (`request_state_security=` an
+`MCPServer`); dieser Server setzt keinen.
+
+Bewusst nicht geaendert: `server/discover` fuehrt weiterhin die Capabilities
+`prompts` und `resources`, weil `MCPServer` beide Handler immer registriert;
+beide Listen sind leer.
+
 ---
 
 ## Tests
@@ -283,7 +318,7 @@ PYTHONPATH=src pytest tests/ -m "live"
 PYTHONPATH=src python scripts/record_fixtures.py
 ```
 
-**181 Tests** — 174 offline, 7 live (zwei davon ohne API-Key).
+**256 Tests** — 249 offline, 7 live (zwei davon ohne API-Key).
 
 Die Live-Tests laufen täglich um 06:17 UTC über
 [`.github/workflows/live-tests.yml`](.github/workflows/live-tests.yml), nicht
